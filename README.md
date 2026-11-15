@@ -1,5 +1,10 @@
 # Advanced Analytics — Android (telefon sürümü) v0.1
 
+> **Yalnızca eğlence ve eğitim amaçlıdır.** Bu uygulama kişisel bir istatistik ve hobi projesidir. Bahis ya da yatırım tavsiyesi
+> vermez, kazanç garantisi vermez, bahis oynamaz ve hiçbir siteye bağlanmaz. Rulette her tur bağımsızdır; uygulama sıradaki
+> sayıyı bilemez, yalnızca geçmişte gelen sayıları sayar. Kullanan kişi, bulunduğu ülkenin yasalarına ve kullandığı sitelerin
+> kurallarına uymaktan kendisi sorumludur. Para kaybetme riski olan oyunlar bağımlılık yapabilir.
+
 Bilgisayardan bağımsız çalışan telefon uygulaması. Bu sürümde **rulet** bölümü vardır; futbol ve basketbol sonraki sürümlerde eklenecek.
 
 ## Bu sürümde olanlar
