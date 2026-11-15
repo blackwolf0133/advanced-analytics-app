@@ -1,0 +1,39 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.aad.mobile'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.aad.mobile'
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName '0.1.0'
+    }
+    // Sabit imza: her derlemede ayni anahtar kullanilir, boylece yeni surum eskisinin ustune kurulur ve veriler silinmez.
+    // Bu anahtar yalnizca kisisel kurulum icindir (uygulama magazaya konmaz).
+    signingConfigs {
+        shared {
+            storeFile file('aad.keystore')
+            storePassword 'aadmobile'
+            keyAlias 'aad'
+            keyPassword 'aadmobile'
+        }
+    }
+    buildTypes {
+        debug { signingConfig signingConfigs.shared }
+        release {
+            signingConfig signingConfigs.shared
+            minifyEnabled false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
