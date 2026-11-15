@@ -1,11 +1,11 @@
-# Advanced Analytics — Android (telefon sürümü) v0.2
+# Advanced Analytics — Android (telefon sürümü) v0.3
 
 > **Yalnızca eğlence ve eğitim amaçlıdır.** Bu uygulama kişisel bir istatistik ve hobi projesidir. Bahis ya da yatırım tavsiyesi
 > vermez, kazanç garantisi vermez, bahis oynamaz ve hiçbir siteye bağlanmaz. Rulette her tur bağımsızdır; uygulama sıradaki
 > sayıyı bilemez, yalnızca geçmişte gelen sayıları sayar. Kullanan kişi, bulunduğu ülkenin yasalarına ve kullandığı sitelerin
 > kurallarına uymaktan kendisi sorumludur. Para kaybetme riski olan oyunlar bağımlılık yapabilir.
 
-Bilgisayardan bağımsız çalışan telefon uygulaması. Bu sürümde **rulet** ve **basketbol (NBA)** bölümleri vardır; futbol sonraki sürümde eklenecek.
+Bilgisayardan bağımsız çalışan telefon uygulaması. Bu sürümde **rulet**, **basketbol (NBA)** ve **futbol** bölümleri vardır.
 
 ## Bu sürümde olanlar
 
@@ -16,7 +16,8 @@ Bilgisayardan bağımsız çalışan telefon uygulaması. Bu sürümde **rulet**
 | Yüzen pencere, bölge seçimi, canlı takip | Yazıldı; tarayıcıda taklit ekranla denendi, **gerçek telefonda henüz denenmedi** |
 | Android tarafı (ekran kaydı izni, yüzen pencere servisi) | Yazıldı; **henüz derlenmedi ve telefonda denenmedi** |
 | Basketbol (NBA): veri indirme, Elo modeli, yaklaşan maçlar, maç analizi, karne, sıralama | Yazıldı; NBA’in veri biçimiyle üretilmiş yapay veriyle denendi, **gerçek NBA adresleriyle henüz denenmedi** |
-| Futbol, EuroLeague, yapay zekâ tartışması, blackjack | Bu sürümde yok |
+| Futbol: 18 lig, veri indirme, gol modeli + Elo, haftanın maçları, maç analizi, karne, puan durumu | Yazıldı; kaynağın dosya biçimiyle üretilmiş yapay veriyle denendi, **gerçek adresle henüz denenmedi** |
+| EuroLeague, yapay zekâ tartışması, blackjack | Bu sürümde yok |
 
 Geliştirme ortamında Android derleme araçlarına erişim olmadığı için kurulum dosyası (APK) GitHub Actions ile üretilir.
 
@@ -44,6 +45,18 @@ izni ister, izin verip kurun. Yeni sürümler aynı imzayla üretilir, eskisinin
   Masaüstü sürümündeki lojistik regresyon ve gradyan artırma modelleri telefonda yoktur (maç istatistikleri indirilmiyor).
 - **Karne:** her tahmin o maçtan önceki bilgiyle yapılır (ileriye dönük test); isabet “hep ev sahibi” ile, toplam sayı hatası
   “hep lig ortalaması” ile karşılaştırılır. Sakatlık, kadro ve dinlenme bilgisi yoktur.
+
+## Futbol
+
+- **Veri:** football-data.co.uk (ücretsiz CSV). Seçilen ligin son 4 sezonu ve yaklaşan haftanın fikstürü indirilir.
+  Ligler: Süper Lig, Premier League, Championship, League One, League Two, La Liga, La Liga 2, Bundesliga, 2. Bundesliga,
+  Serie A, Serie B, Ligue 1, Ligue 2, Eredivisie, Belçika, Portekiz, İskoçya, Yunanistan. (Kaynakta Hollanda Eerste Divisie
+  ve milli takım maçları yoktur.)
+- **Modeller:** zaman ağırlıklı Poisson gol modeli + Dixon-Coles düşük skor düzeltmesi, ve Elo + sıralı lojistik. Olasılık
+  ikisinin ortalamasıdır; 1X2, beklenen gol, 2,5 alt/üst, karşılıklı gol ve en olası skorlar gösterilir.
+- **Karne:** son sezonun her 40 maçlık bloğu yalnızca öncesindeki maçlarla kurulan modelle tahmin edilir; lig ortalaması ve
+  bahis oranlarından çıkan olasılıkla karşılaştırılır; güven aralıklarına göre isabet ve oranlara karşı getiri gösterilir.
+- Masaüstü sürümündeki Bayes ve makine öğrenmesi modelleri telefonda yoktur. Sakatlık, ceza, kadro ve xG bilgisi yoktur.
 
 ## Sınırlar
 

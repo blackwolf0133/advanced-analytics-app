@@ -1,19 +1,13 @@
 // Basketbol (NBA) ekrani.
 import * as B from './basket.js';
-import { $, esc, pct, num, Native } from './ui.js';
+import { $, esc, pct, num } from './ui.js';
+import { httpGet } from './net.js';
 
 const st = { tab: 'games', db: null, model: null, ev: null, busy: false, report: null, home: null, away: null };
 const sgn = (v, d = 1) => (v > 0 ? '+' : '') + num(v, d);
 const tn = (c) => st.db.teams[c] || c;
 const trTime = (utc) => new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(utc));
 
-/** Telefonda yerel kopru uzerinden indirir (tarayici dogrudan indiremez: NBA baska sitelerden gelen istekleri kabul etmez). */
-const pending = new Map(); let seq = 0;
-export function onHttp(id, status, body) { const p = pending.get(id); if (!p) return; pending.delete(id); if (status === 200) p.ok(body); else p.fail(new Error(status > 0 ? `sunucu ${status} yanıtı verdi` : (body || 'bağlantı kurulamadı'))); }
-function httpGet(url, headers) {
-  if (!Native?.httpGet) return Promise.reject(new Error('indirme yalnızca telefona kurulan uygulamada çalışır'));
-  return new Promise((ok, fail) => { const id = 'h' + (++seq); pending.set(id, { ok, fail }); Native.httpGet(id, url, JSON.stringify(headers || {})); setTimeout(() => { if (pending.delete(id)) fail(new Error('zaman aşımı')); }, 70000); });
-}
 function reload() {
   st.db = B.loadDb(); const games = B.allGames(st.db);
   st.model = games.length ? B.build(games) : null; st.ev = st.model ? B.evaluate(st.model) : null;

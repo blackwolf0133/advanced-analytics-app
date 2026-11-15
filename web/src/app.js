@@ -2,9 +2,11 @@
 import * as R from './roulette.js';
 import { loadRoulette, saveRoulette, activeSession, newSession, withActive, read } from './store.js';
 import { $, esc, pct, num, ball, Native } from './ui.js';
-import { viewBasket, onHttp } from './basketui.js';
+import { viewBasket } from './basketui.js';
+import { viewFootball } from './footballui.js';
+import { onHttp } from './net.js';
 
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 const st = { view: 'roulette', db: null, lastPred: undefined, armed: null, cap: 'off' };
 const TITLES = { roulette: 'Rulet', football: 'Futbol', basket: 'Basketbol', settings: 'Ayarlar' };
 
@@ -18,7 +20,7 @@ function confirmTap(btn, label, fn) {
 function setView(v) {
   st.view = v; $('#title').textContent = TITLES[v];
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
-  ({ roulette: viewRoulette, football: viewSoon, basket: () => viewBasket(toast), settings: viewSettings })[v]();
+  ({ roulette: viewRoulette, football: () => viewFootball(toast), basket: () => viewBasket(toast), settings: viewSettings })[v]();
   $('#main').scrollTop = 0;
 }
 
@@ -95,11 +97,6 @@ function bindScreen() {
 const honest = () => `<div class="warn"><b>Bilmeniz gereken:</b> Program gelen sayıları sayar ve geçmişte ne olduğunu gösterir. Sıradaki sayıyı bilemez; rulette her tur bir öncekinden bağımsızdır ve kasa avantajı (%2,7) hangi sayıya oynarsanız oynayın değişmez.</div>`;
 
 /* ---------------- diger ekranlar ---------------- */
-function viewSoon() {
-  $('#main').innerHTML = `<div class="card"><h2>Futbol <span class="tag">hazırlanıyor</span></h2>
-    <p class="muted">Bu bölüm sonraki sürümde gelecek. Telefonun kendisi veriyi indirecek ve modelleri çalıştıracak; bilgisayar gerekmeyecek.</p>
-    <ol class="steps"><li>Lig verisi (football-data.co.uk) telefona indirilir.</li><li>Poisson, Dixon-Coles ve Elo modelleri telefonda çalışır.</li><li>Haftanın maçları ve olasılıklar, geçmiş testiyle birlikte gösterilir.</li></ol></div>`;
-}
 function viewSettings() {
   const d = loadRoulette(), n = d.sessions.reduce((a, s) => a + s.spins.length, 0);
   $('#main').innerHTML = `${honest()}
