@@ -6,7 +6,7 @@ import { viewBasket } from './basketui.js';
 import { viewFootball } from './footballui.js';
 import { onHttp } from './net.js';
 
-const VERSION = '0.3.0';
+const VERSION = '0.3.1';
 const st = { view: 'roulette', db: null, lastPred: undefined, armed: null, cap: 'off' };
 const TITLES = { roulette: 'Rulet', football: 'Futbol', basket: 'Basketbol', settings: 'Ayarlar' };
 
@@ -81,8 +81,8 @@ function screenCard() {
     <button id="cap" class="${on ? '' : 'primary'}" style="width:100%">${on ? 'Okumayı ve yüzen pencereyi kapat' : 'Yüzen pencereyi aç'}</button>
     ${on ? `<p class="muted" style="margin:10px 0 0">Şimdi rulet oyununa geçin. Yüzen pencerede ${cfg ? '“Başlat”a' : '“Bölge”ye'} dokunun.</p>` : `<ol class="steps">
       <li>Düğmeye dokunun. Telefon iki izin ister: “diğer uygulamaların üzerinde göster” ve “ekranı kaydet”. Ekran kaydında <b>tüm ekran</b>ı seçin.</li>
-      <li>Rulet oyununa geçin ve “Sonuçlar” tablosunu açın.</li>
-      <li>Yüzen pencerede “Bölge”ye dokunun, tabloyu parmağınızla çerçeveleyin, satır ve sütun sayısını seçin, “Dene” ile kontrol edin.</li>
+      <li>Rulet oyununa geçin. Sayıların göründüğü yer ekranda olsun: “Sonuçlar” tablosu ya da üstteki tek sıralık şerit.</li>
+      <li>Yüzen pencerede “Bölge”ye dokunun, sayıların olduğu alanı parmağınızla çerçeveleyin (şerit için “Tek sıra”ya dokunun), sarı çizgileri sayıların arasına oturtun, “Dene” ile kontrol edin.</li>
       <li>“Başlat”a dokunun. Yeni sayılar kendiliğinden kaydedilir; tahmin yüzen pencerede görünür.</li></ol>`}
   </div>`;
 }
