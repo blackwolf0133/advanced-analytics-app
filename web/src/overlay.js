@@ -69,7 +69,7 @@ function tick() {
     if (!st.tracker) {
       if (s.spins.length === 0 && c.rows * c.cols > 1) {          // bos oturum: tablodaki gecmis iki kez okunur, ayni cikanlar aktarilir
         const a = readNewest(c, c.rows * c.cols, grab);
-        if (a === 'black') { say('Görüntü siyah geliyor. Bu uygulama ekran kaydını engelliyor olabilir.'); return; }
+        if (a === 'black') { say('Görüntü siyah geliyor: tarayıcı ekran kaydını engelliyor. Tor Browser’da Ayarlar → Gelişmiş → “Ekran görüntülerine izin ver”i açın.'); return; }
         if (!a) { say('Ekran görüntüsü alınamadı.'); return; }
         if (!st.first) { st.first = a; say('Tablodaki geçmiş okunuyor…'); return; }
         const vals = a.map((v, i) => (v === st.first[i] ? v : null)); st.first = null;
@@ -82,7 +82,7 @@ function tick() {
       render(); return;
     }
     const vals = readNewest(c, n, grab);
-    if (vals === 'black') { say('Görüntü siyah geliyor. Bu uygulama ekran kaydını engelliyor olabilir.'); return; }
+    if (vals === 'black') { say('Görüntü siyah geliyor: tarayıcı ekran kaydını engelliyor. Tor Browser’da Ayarlar → Gelişmiş → “Ekran görüntülerine izin ver”i açın.'); return; }
     if (!vals) { say('Ekran görüntüsü alınamadı.'); return; }
     const r = st.tracker.feed(vals);
     if (r.fresh.length) {
@@ -152,7 +152,7 @@ function bindPicker() {
     else if (act === 'cancel') { setMode('mini'); st.pick = null; render(); return; }
     else if (act === 'test') {
       if (!p.rect) return; $('#hint').textContent = 'Okunuyor…';
-      setTimeout(() => { if (!shoot()) return; const c = { ...p.rect, rows: p.rows, cols: p.cols, newest: 'first' }; const v = readNewest(c, p.rows * p.cols, (l, t, w, h) => Native.grabFrozen(l, t, w, h)); p.results = Array.isArray(v) ? v : null; draw(); if (!Array.isArray(v)) $('#hint').textContent = v === 'black' ? 'Görüntü siyah geliyor. Bu uygulama ekran kaydını engelliyor olabilir.' : 'Bölge okunamadı.'; }, 30);
+      setTimeout(() => { if (!shoot()) return; const c = { ...p.rect, rows: p.rows, cols: p.cols, newest: 'first' }; const v = readNewest(c, p.rows * p.cols, (l, t, w, h) => Native.grabFrozen(l, t, w, h)); p.results = Array.isArray(v) ? v : null; draw(); if (!Array.isArray(v)) $('#hint').textContent = v === 'black' ? 'Görüntü siyah geliyor: tarayıcı ekran kaydını engelliyor. Tor Browser’da Ayarlar → Gelişmiş → “Ekran görüntülerine izin ver”i açın.' : 'Bölge okunamadı.'; }, 30);
       return;
     } else if (act === 'save') {
       if (!p.rect) { $('#hint').textContent = 'Önce tabloyu çerçeveleyin.'; return; }

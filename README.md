@@ -38,7 +38,9 @@ izni ister, izin verip kurun. Yeni sürümler aynı imzayla üretilir, eskisinin
 
 - Program geçmişi sayar; sıradaki sayıyı bilemez. Hangi sayı gösterilirse gösterilsin tutma şansı 37’de 1’dir (üç komşu
   bölgesi için 37’de 15). Karne bunu “şansla beklenen” ile yan yana gösterir.
-- Yalnızca Avrupa ruleti (0-36). Bazı uygulamalar ekran kaydını engeller; görüntü siyah gelirse okuma yapılamaz.
+- Yalnızca Avrupa ruleti (0-36).
+- Brave ve Chrome’da ek ayar gerekmez. Tor Browser ekran kaydını varsayılan olarak engeller (görüntü siyah gelir); okuma için
+  Tor Browser’da Ayarlar → Gelişmiş → “Ekran görüntülerine izin ver” açılmalıdır. Uygulama bu engeli kendisi aşmaz.
 - Yüzen pencere okunan tablonun üstünü kapatmamalı. Telefon döndürülürse bölge yeniden seçilir.
 - Uygulama hiçbir siteye bağlanmaz, oyuna dokunmaz, bahis yapmaz; veriler yalnızca telefonda durur.
 

@@ -3,7 +3,7 @@ import * as R from './roulette.js';
 import { loadRoulette, saveRoulette, activeSession, newSession, withActive, read } from './store.js';
 import { $, esc, pct, num, ball, Native } from './ui.js';
 
-const VERSION = '0.1.0';
+const VERSION = '0.1.1';
 const st = { view: 'roulette', db: null, lastPred: undefined, armed: null, cap: 'off' };
 const TITLES = { roulette: 'Rulet', football: 'Futbol', basket: 'Basketbol', settings: 'Ayarlar' };
 
@@ -105,7 +105,7 @@ function viewSettings() {
   const d = loadRoulette(), n = d.sessions.reduce((a, s) => a + s.spins.length, 0);
   $('#main').innerHTML = `${honest()}
   <div class="card"><h2>Uygulama</h2><p class="muted">Advanced Analytics · telefon sürümü ${VERSION}<br>Veriler yalnızca bu telefonda saklanır; hiçbir yere gönderilmez. Uygulama hiçbir siteye bağlanmaz, oyuna müdahale etmez ve bahis yapmaz; yalnızca ekrandaki sayıları okur.</p></div>
-  <div class="card"><h2>Ekran okuma hakkında</h2><ol class="steps"><li>Yalnızca Avrupa ruleti (0-36) desteklenir.</li><li>Bazı uygulamalar ekran kaydını engeller; o zaman görüntü siyah gelir ve okuma yapılamaz.</li><li>Yüzen pencere okunan tablonun üstünü kapatmamalıdır.</li><li>Telefonu döndürürseniz bölgeyi yeniden seçmeniz gerekir.</li><li>Okunamayan sayı kaydedilmez; yanlış kayıt olursa “Geri al” ile silin.</li></ol></div>
+  <div class="card"><h2>Ekran okuma hakkında</h2><ol class="steps"><li>Yalnızca Avrupa ruleti (0-36) desteklenir.</li><li>Brave ve Chrome’da ek ayar gerekmez.</li><li><b>Tor Browser</b> ekran kaydını varsayılan olarak engeller; görüntü siyah gelir. Okuma için Tor Browser’da Ayarlar → Gelişmiş → “Ekran görüntülerine izin ver” (Allow screenshots) açılmalıdır. Bu ayar açıkken telefondaki başka uygulamalar da Tor ekranını kaydedebilir ve sayfa “son uygulamalar” önizlemesinde görünür; işiniz bitince kapatın.</li><li>Uygulama bu engeli kendisi aşmaz ve aşmaya çalışmaz.</li><li>Yüzen pencere okunan tablonun üstünü kapatmamalıdır.</li><li>Telefonu döndürürseniz bölgeyi yeniden seçmeniz gerekir.</li><li>Okunamayan sayı kaydedilmez; yanlış kayıt olursa “Geri al” ile silin.</li></ol></div>
   <div class="card"><h2>Veri</h2><p class="muted">${d.sessions.length} oturum, ${n} sayı kayıtlı.</p><button id="wipe" class="danger" style="width:100%">Bütün rulet verisini sil</button></div>`;
   $('#wipe').onclick = (e) => confirmTap(e.target, 'Hepsi silinecek. Tekrar dokunun', () => { saveRoulette({ sessions: [], active: null, seq: 0 }); toast('Rulet verisi silindi.'); viewSettings(); });
 }
