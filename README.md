@@ -1,11 +1,11 @@
-# Advanced Analytics — Android (telefon sürümü) v0.1
+# Advanced Analytics — Android (telefon sürümü) v0.2
 
 > **Yalnızca eğlence ve eğitim amaçlıdır.** Bu uygulama kişisel bir istatistik ve hobi projesidir. Bahis ya da yatırım tavsiyesi
 > vermez, kazanç garantisi vermez, bahis oynamaz ve hiçbir siteye bağlanmaz. Rulette her tur bağımsızdır; uygulama sıradaki
 > sayıyı bilemez, yalnızca geçmişte gelen sayıları sayar. Kullanan kişi, bulunduğu ülkenin yasalarına ve kullandığı sitelerin
 > kurallarına uymaktan kendisi sorumludur. Para kaybetme riski olan oyunlar bağımlılık yapabilir.
 
-Bilgisayardan bağımsız çalışan telefon uygulaması. Bu sürümde **rulet** bölümü vardır; futbol ve basketbol sonraki sürümlerde eklenecek.
+Bilgisayardan bağımsız çalışan telefon uygulaması. Bu sürümde **rulet** ve **basketbol (NBA)** bölümleri vardır; futbol sonraki sürümde eklenecek.
 
 ## Bu sürümde olanlar
 
@@ -15,7 +15,8 @@ Bilgisayardan bağımsız çalışan telefon uygulaması. Bu sürümde **rulet**
 | Ekrandaki “Sonuçlar” tablosunu okuma (rakam tanıma) | Hazır; gerçek oyun ekran görüntüsünde 90/90 doğru |
 | Yüzen pencere, bölge seçimi, canlı takip | Yazıldı; tarayıcıda taklit ekranla denendi, **gerçek telefonda henüz denenmedi** |
 | Android tarafı (ekran kaydı izni, yüzen pencere servisi) | Yazıldı; **henüz derlenmedi ve telefonda denenmedi** |
-| Futbol, basketbol, yapay zekâ tartışması, blackjack | Bu sürümde yok |
+| Basketbol (NBA): veri indirme, Elo modeli, yaklaşan maçlar, maç analizi, karne, sıralama | Yazıldı; NBA’in veri biçimiyle üretilmiş yapay veriyle denendi, **gerçek NBA adresleriyle henüz denenmedi** |
+| Futbol, EuroLeague, yapay zekâ tartışması, blackjack | Bu sürümde yok |
 
 Geliştirme ortamında Android derleme araçlarına erişim olmadığı için kurulum dosyası (APK) GitHub Actions ile üretilir.
 
@@ -33,6 +34,16 @@ izni ister, izin verip kurun. Yeni sürümler aynı imzayla üretilir, eskisinin
 4. Yüzen pencerede **Bölge** → tabloyu parmakla çerçeveleyin → satır/sütun sayısını ayarlayın → **Dene** → **Kaydet**.
 5. **Başlat**. Oturum boşsa tablodaki sayılar geçmiş olarak aktarılır; sonra her yeni sayı kendiliğinden kaydedilir.
    Tahmin, komşu bölgeleri ve ★ sayacı yüzen pencerede görünür. Topa dokununca pencere küçülür.
+
+## Basketbol (NBA)
+
+- **Veri:** bu sezonun sonuçları ve fikstürü `cdn.nba.com` üzerindeki fikstür dosyasından; önceki iki sezon `stats.nba.com`
+  üzerinden indirilir. Önceki sezonlar alınamazsa uygulama yalnızca bu sezonla çalışır ve bunu ekranda söyler.
+- **Model:** yalnızca maç skorlarını kullanan Elo (ev sahibi avantajı, sayı farkı çarpanı, sezonlar arası ortalamaya çekme).
+  Kazanma olasılığı ve beklenen sayı farkı Elo’dan; beklenen toplam sayı takımların hücum/savunma ortalamalarından hesaplanır.
+  Masaüstü sürümündeki lojistik regresyon ve gradyan artırma modelleri telefonda yoktur (maç istatistikleri indirilmiyor).
+- **Karne:** her tahmin o maçtan önceki bilgiyle yapılır (ileriye dönük test); isabet “hep ev sahibi” ile, toplam sayı hatası
+  “hep lig ortalaması” ile karşılaştırılır. Sakatlık, kadro ve dinlenme bilgisi yoktur.
 
 ## Sınırlar
 
