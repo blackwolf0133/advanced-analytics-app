@@ -22,3 +22,25 @@ export function newestRects(c, limit) {
 export function readRects(img, box) {
   return box.rects.map((r) => { const v = readCell(sub(img, r.x0 - box.x0, r.y0 - box.y0, r.x1 - box.x0, r.y1 - box.y0))[0]; return v === null ? null : Number(v); });
 }
+
+/**
+ * Tek siralik seridi dikeyde hizalar. band: ekranin y0 satirindan baslayan, c.l..c.l+c.w sutunlarini kapsayan goruntu.
+ * Farkli ust kenar ve yukseklikler denenir; en yeni 'probe' hucrenin en cogunun okundugu konumlarin ortasi secilir.
+ * scale: ekran genisligi / 1080 (yukseklik adaylari buna gore olceklenir). Donus: { t, h, score, n } ya da null.
+ */
+export function alignStrip(band, y0, c, scale = 1, probe = 4) {
+  const hs = [50, 60, 42].map((v) => Math.round(v * scale)), step = Math.max(2, Math.round(4 * scale)), n = Math.min(probe, c.cols), full = n + 0.5;
+  let best = null;
+  for (const h of hs) {
+    const all = [];
+    for (let t = y0; t + h <= y0 + band.h; t += step) {
+      const box = newestRects({ ...c, t, h }, n), vals = readRects(sub(band, box.x0, t - y0 + box.y0, box.x1, t - y0 + box.y1), box);
+      all.push({ t, h, n, score: vals.filter((v) => v !== null).length + (vals[0] !== null ? 0.5 : 0) });
+    }
+    if (!all.length) continue;
+    const top = Math.max(...all.map((x) => x.score)), ok = all.filter((x) => x.score === top), mid = ok[Math.floor(ok.length / 2)];
+    if (!best || top > best.score) best = mid;
+    if (top === full) break;                       // bu yukseklikte hepsi okundu: digerlerini denemeye gerek yok
+  }
+  return best && best.score >= 1.5 ? best : null;
+}

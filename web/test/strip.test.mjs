@@ -19,3 +19,13 @@ test('parmakla cizilen kutu biraz kaysa da yanlis okuma olmaz', () => {
     read(c, 6).forEach((v, k) => { if (v === WANT[k]) ok++; else if (v === null) none++; else wrong++; }); }
   console.log('  dogru', ok, 'yanlis', wrong, 'okunamadi', none); assert.ok(wrong === 0 && ok / 240 > 0.9);
 });
+import { alignStrip } from '../src/geom.js';
+test('otomatik hizalama: seride kabaca dokunmak yeter (iki gercek telefon ekrani)', () => {
+  const p2 = PNG.sync.read(fs.readFileSync(new URL('./fixtures/lightning_gri.png', import.meta.url))), img2 = fromRGBA(p2.data, p2.width, p2.height);
+  for (const [im, center, want, first] of [[img, 301, WANT, 1.6], [img2, 85, [4, 31, 27, 6, 22, 17, 13, 21, 21, 27, 29, 35, 19, 13], 1.6]]) for (const off of [-22, -8, 0, 12, 24]) {
+    const tap = center + off, y0 = Math.max(0, tap - 65), band = sub(im, 0, y0, im.w, Math.min(im.h, tap + 65)), c = { l: 0, w: im.w, t: tap - 25, h: 50, rows: 1, cols: 14, first, newest: 'first' };
+    const t0 = Date.now(), a = alignStrip(band, y0, c); assert.ok(a && a.score === 4.5, `dokunma ${tap}: ${JSON.stringify(a)}`);
+    const cc = { ...c, t: a.t, h: a.h }, b = newestRects(cc, 13), got = readRects(sub(im, b.x0, cc.t + b.y0, b.x1, cc.t + b.y1), b);
+    assert.deepStrictEqual(got, want.slice(0, 13), `dokunma ${tap} -> t=${a.t} h=${a.h}`); if (off === 0) console.log('  hizalama', Date.now() - t0, 'ms, t =', a.t, 'h =', a.h);
+  }
+});
