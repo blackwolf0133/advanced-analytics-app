@@ -43,6 +43,9 @@ izni ister, izin verip kurun. Yeni sürümler aynı imzayla üretilir, eskisinin
 - **Model:** yalnızca maç skorlarını kullanan Elo (ev sahibi avantajı, sayı farkı çarpanı, sezonlar arası ortalamaya çekme).
   Kazanma olasılığı ve beklenen sayı farkı Elo’dan; beklenen toplam sayı takımların hücum/savunma ortalamalarından hesaplanır.
   Masaüstü sürümündeki lojistik regresyon ve gradyan artırma modelleri telefonda yoktur (maç istatistikleri indirilmiyor).
+- **Güven eşiği:** “Maçlar” ve “Sonuçlar” sekmelerinde Hepsi / %60+ / %70+ / %80+ seçilir; her eşiğin geçmiş testteki isabeti yanında yazar.
+- **Sonuçlar:** son 4 maç gününde modelin maç öncesi tahmini ve gerçek skor; tutanlar yeşil ✓, tutmayanlar kırmızı ✗.
+  Tahminler ileriye dönük kayıttan gelir (yalnızca o maçtan önceki maçlarla hesaplanmıştır).
 - **Karne:** her tahmin o maçtan önceki bilgiyle yapılır (ileriye dönük test); isabet “hep ev sahibi” ile, toplam sayı hatası
   “hep lig ortalaması” ile karşılaştırılır. Sakatlık, kadro ve dinlenme bilgisi yoktur.
 

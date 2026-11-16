@@ -30,6 +30,9 @@ test('model: ileriye donuk testte "hep ev sahibi"nden iyi, toplam tahmini lig or
   const hi = e.buckets[3], lo = e.buckets[0]; assert.ok(lo.rate < 0.62 && (hi.n < 30 || hi.rate > 0.72));   // guven arttikca isabet artar
   const best = [...m.elo].sort((a, b) => b[1] - a[1])[0][0], worst = [...m.elo].sort((a, b) => a[1] - b[1])[0][0], p = B.predict(m, best, worst);
   assert.ok(p.pHome > 0.8 && p.margin > 6 && p.total > 180 && p.total < 270 && p.known && !B.predict(m, 'XXX', best).known);
+  assert.deepStrictEqual(e.atLeast.map((x) => x.t), [0.5, 0.6, 0.7, 0.8]); assert.strictEqual(e.atLeast[0].n, e.n); assert.ok(e.atLeast[1].n < e.atLeast[0].n && e.atLeast[2].rate > e.atLeast[0].rate);
+  const days = B.recent(m, 3), g = days[0].games[0]; assert.strictEqual(days.length, 3); assert.ok(days[0].date > days[1].date && days[0].games.length > 0);
+  assert.strictEqual(g.hit, (g.pick === g.home) === (g.hp > g.ap)); assert.ok(g.conf >= 0.5 && g.actualTotal === g.hp + g.ap);
   assert.strictEqual(B.evaluate(B.build(league([2025]).slice(0, 120))), null);
   assert.ok(B.evaluate(B.build(league([2025]))).n > 500);
 });

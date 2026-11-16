@@ -6,7 +6,7 @@ import { viewBasket } from './basketui.js';
 import { viewFootball } from './footballui.js';
 import { onHttp } from './net.js';
 
-const VERSION = '0.3.1';
+const VERSION = '0.4.0';
 const st = { view: 'roulette', db: null, lastPred: undefined, armed: null, cap: 'off' };
 const TITLES = { roulette: 'Rulet', football: 'Futbol', basket: 'Basketbol', settings: 'Ayarlar' };
 

@@ -26,7 +26,10 @@ try:
         pg.add_init_script(MOCK); pg.goto("http://127.0.0.1:8812/index.html"); pg.click('#nav [data-v="basket"]')
         assert "veri yok" in pg.inner_text("#main"); pg.click("#b-dl"); pg.wait_for_selector("#b-tabs", timeout=20000)
         txt = pg.inner_text("#main"); assert "1420 maç" in txt and "2024-25: alınamadı" in txt and "2025-26: 1230 maç" in txt, txt[:300]
-        assert pg.locator("#b-body .card").count() == 4; print("yaklasan:", pg.inner_text("#b-body .card >> nth=0").replace("\n", " | ")[:230]); pg.screenshot(path="/tmp/phone_nba.png")
+        assert pg.locator("#b-body .tiles").count() == 4; print("yaklasan:", pg.inner_text("#b-body .card >> nth=0").replace("\n", " | ")[:230]); pg.screenshot(path="/tmp/phone_nba.png")
+        pg.click('#b-min [data-m="0.8"]'); n80 = pg.locator("#b-body .tiles").count(); pg.click('#b-min [data-m="0.6"]'); n60 = pg.locator("#b-body .tiles").count(); assert n80 <= n60 <= 4 and "tahminin" in pg.inner_text("#b-body .card >> nth=0")
+        pg.click('[data-t="results"]'); marks = pg.locator("#b-body .mark").count(); oks = pg.locator("#b-body .mark.ok").count(); print("sonuclar:", marks, "satir,", oks, "tutan |", pg.inner_text("#b-body .card >> nth=1").replace("\n", " ")[:80])
+        assert marks > 5 and 0 < oks < marks; pg.screenshot(path="/tmp/phone_nba_res.png"); pg.click('#b-min [data-m="0.5"]'); assert pg.locator("#b-body .mark").count() > marks
         pg.click('[data-t="match"]'); pg.select_option("#b-a", "T05"); assert "Beklenen toplam" in pg.inner_text("#b-body")
         pg.click('[data-t="eval"]'); print("karne:", pg.inner_text("#b-body .tiles").replace("\n", " ")); pg.screenshot(path="/tmp/phone_nba_eval.png")
         pg.click('[data-t="table"]'); assert pg.locator("#b-body tbody tr").count() == 30

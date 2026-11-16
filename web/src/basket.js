@@ -70,7 +70,7 @@ export function build(games) {
     }
     const eh = get(elo, h, 1500), ea = get(elo, a, 1500), d = eh - ea + HFA, p = expected(d);
     const total = get(off, h, lg) + get(def, a, lg) + get(off, a, lg) + get(def, h, lg) - 2 * lg;
-    log.push({ y, p, margin: d / PER_POINT, total, base: 2 * lg, hw: hp > ap ? 1 : 0, m: hp - ap, t: hp + ap, seen: Math.min(get(played, h, 0), get(played, a, 0)) });
+    log.push({ date, h, a, hp, ap, y, p, margin: d / PER_POINT, total, base: 2 * lg, hw: hp > ap ? 1 : 0, m: hp - ap, t: hp + ap, seen: Math.min(get(played, h, 0), get(played, a, 0)) });
     const s = hp > ap ? 1 : 0, mov = Math.abs(hp - ap), dw = s ? d : -d, mult = Math.pow(mov + 3, 0.8) / (7.5 + 0.006 * dw), shift = K * mult * (s - p);
     elo.set(h, eh + shift); elo.set(a, ea - shift);
     off.set(h, get(off, h, lg) + ALPHA * (hp - get(off, h, lg))); def.set(h, get(def, h, lg) + ALPHA * (ap - get(def, h, lg)));
@@ -98,7 +98,9 @@ export function evaluate(m) {
     const b = buckets.find((x) => conf >= x.lo && conf < x.hi); b.n++; b.k += ok;
   }
   const n = rows.length;
-  return { n, multi, acc: hit / n, accCi: wilson(hit, n), homeRate: home / n, brier: brier / n, logloss: ll / n, marginMae: mae / n, totalMae: tmae / n, totalBaseMae: tbase / n,
+  // "En az su kadar guvenli" tahminlerin gecmis isabeti (esik secimi icin)
+  const atLeast = [0.5, 0.6, 0.7, 0.8].map((t) => { let m = 0, k = 0; for (const r of rows) { const c = Math.max(r.p, 1 - r.p); if (c >= t) { m++; k += (r.p >= 0.5 ? 1 : 0) === r.hw ? 1 : 0; } } return { t, n: m, k, rate: m ? k / m : null, ci: wilson(k, m) }; });
+  return { n, multi, atLeast, acc: hit / n, accCi: wilson(hit, n), homeRate: home / n, brier: brier / n, logloss: ll / n, marginMae: mae / n, totalMae: tmae / n, totalBaseMae: tbase / n,
     buckets: buckets.map((b) => ({ ...b, rate: b.n ? b.k / b.n : null, ci: wilson(b.k, b.n) })) };
 }
 export function standings(db) {
@@ -133,4 +135,17 @@ export async function download(get, past = 2) {
   }
   db.fetched = Date.now(); saveDb(db);
   return report;
+}
+
+/**
+ * Son oynanan maclar icin modelin mac ONCESI tahmini ve gercek sonuc (en yeni gun basta).
+ * Tahminler build() icindeki ileriye donuk kayittan gelir: her biri yalnizca o mactan onceki maclarla hesaplanmistir,
+ * yani veriler guncelken uygulamanin mactan once gosterdigi tahminle aynidir.
+ */
+export function recent(m, daysBack = 4) {
+  const dates = [...new Set(m.log.filter((r) => r.y === m.lastSeason).map((r) => r.date))].sort().slice(-daysBack).reverse();
+  return dates.map((date) => ({ date, games: m.log.filter((r) => r.date === date && r.y === m.lastSeason).map((r) => {
+    const pickHome = r.p >= 0.5, conf = Math.max(r.p, 1 - r.p);
+    return { home: r.h, away: r.a, hp: r.hp, ap: r.ap, pick: pickHome ? r.h : r.a, conf, hit: pickHome === (r.hp > r.ap), margin: r.margin, total: r.total, actualTotal: r.hp + r.ap };
+  }) }));
 }

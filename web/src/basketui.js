@@ -3,7 +3,7 @@ import * as B from './basket.js';
 import { $, esc, pct, num } from './ui.js';
 import { httpGet } from './net.js';
 
-const st = { tab: 'games', db: null, model: null, ev: null, busy: false, report: null, home: null, away: null };
+const st = { min: 0.5, tab: 'games', db: null, model: null, ev: null, busy: false, report: null, home: null, away: null };
 const sgn = (v, d = 1) => (v > 0 ? '+' : '') + num(v, d);
 const tn = (c) => st.db.teams[c] || c;
 const trTime = (utc) => new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(utc));
@@ -22,7 +22,7 @@ export function viewBasket(toast) {
     ${st.report ? `<p class="muted" style="margin:8px 0 0">${st.report.map((r) => `${B.seasonLabel(r.season)}: ${r.ok ? r.n + ' maç' + (r.cached ? ' (kayıtlı)' : '') : 'alınamadı (' + esc(r.error) + ')'}`).join('<br>')}</p>` : ''}
   </div>
   ${n && ys.length < 2 ? `<div class="warn">Yalnızca bu sezonun verisi var. Önceki sezonlar indirilemediği için model takımları az maçla tanıyor; tahminler daha zayıftır. “Verileri güncelle” ile yeniden deneyin.</div>` : ''}
-  ${n ? `<div class="row" id="b-tabs" style="margin-bottom:12px">${[['games', 'Yaklaşan maçlar'], ['match', 'Maç analizi'], ['eval', 'Karne'], ['table', 'Sıralama']].map(([k, v]) => `<button data-t="${k}" class="grow ${st.tab === k ? 'primary' : ''}" style="padding:8px 4px;min-height:40px;font-size:13px">${v}</button>`).join('')}</div><div id="b-body"></div>`
+  ${n ? `<div class="row" id="b-tabs" style="margin-bottom:12px">${[['games', 'Maçlar'], ['results', 'Sonuçlar'], ['match', 'Analiz'], ['eval', 'Karne'], ['table', 'Sıralama']].map(([k, v]) => `<button data-t="${k}" class="grow ${st.tab === k ? 'primary' : ''}" style="padding:8px 2px;min-height:40px;font-size:12.5px">${v}</button>`).join('')}</div><div id="b-body"></div>`
     : `<div class="card"><h2>Nasıl çalışır</h2><ol class="steps"><li>“Verileri indir”e dokunun: bu sezonun ve önceki iki sezonun maç sonuçları iner.</li><li>Elo modeli her takımın gücünü maç maç günceller; kazanma olasılığı, beklenen sayı farkı ve toplam sayı buradan hesaplanır.</li><li>“Karne” sekmesi modelin geçmişte gerçekten ne kadar tuttuğunu gösterir.</li></ol></div>`}
   <div class="warn">Olasılıklar yalnızca geçmiş maç skorlarından hesaplanır. Sakatlık, kadro ve dinlenme bilgisi yoktur; tek bir yıldız oyuncunun yokluğu sonucu ciddi biçimde değiştirir. Kazanç garantisi yoktur.</div>`;
   $('#b-dl').onclick = async () => {
@@ -33,7 +33,7 @@ export function viewBasket(toast) {
   };
   const tabs = $('#b-tabs'); if (!tabs) return;
   tabs.onclick = (e) => { const b = e.target.closest('[data-t]'); if (b) { st.tab = b.dataset.t; viewBasket(toast); } };
-  ({ games: tabGames, match: tabMatch, eval: tabEval, table: tabTable })[st.tab]();
+  ({ games: tabGames, results: tabResults, match: tabMatch, eval: tabEval, table: tabTable })[st.tab]();
 }
 function confNote(p) {
   const ev = st.ev; if (!ev) return '';
@@ -49,10 +49,32 @@ function card(home, away, when) {
     <div class="bar2"><i style="width:${ph * 100}%"></i></div>
     <p class="muted" style="margin:6px 0 0">Ev sahibi ${esc(home)} ${pct(ph)} · deplasman ${esc(away)} ${pct(1 - ph)}${p.known ? '' : ' · takımlardan biri için veri yok'}<br>${confNote(conf)}</p></div>`;
 }
+/** Guven esigi secimi: Hepsi / %60+ / %70+ / %80+ ve o esigin gecmis testteki isabeti. */
+function chips() {
+  const al = st.ev?.atLeast.find((x) => x.t === st.min);
+  return `<div class="card"><h2>Güven eşiği <span class="tag">modelin favoriye verdiği olasılık</span></h2>
+    <div class="row" id="b-min">${[[0.5, 'Hepsi'], [0.6, '%60+'], [0.7, '%70+'], [0.8, '%80+']].map(([v, l]) => `<button data-m="${v}" class="grow ${st.min === v ? 'primary' : ''}" style="min-height:40px;padding:6px 4px">${l}</button>`).join('')}</div>
+    <p class="muted" style="margin:10px 0 0">${al && al.n ? `Geçmiş testte güveni ${pct(st.min, 0)} ve üstü olan <b>${al.n}</b> tahminin <b>${pct(al.rate)}</b>’i tuttu (aralık ${pct(al.ci[0], 0)}–${pct(al.ci[1], 0)}).` : 'Bu eşik için geçmiş testte yeterli tahmin yok.'}
+      ${st.min >= 0.7 ? ' Eşik yükseldikçe isabet artar, maç sayısı ve bahis oranı düşer.' : ''}</p></div>`;
+}
+function bindChips(redraw) { $('#b-min').onclick = (e) => { const b = e.target.closest('[data-m]'); if (b) { st.min = Number(b.dataset.m); redraw(); } }; }
 function tabGames() {
-  const now = Date.now(), list = st.db.upcoming.filter((g) => { const t = Date.parse(g.utc); return t > now - 3 * 3600e3 && t < now + 48 * 3600e3; }).sort((a, b) => Date.parse(a.utc) - Date.parse(b.utc));
-  $('#b-body').innerHTML = list.length ? list.map((g) => card(g.home, g.away, trTime(g.utc))).join('')
-    : `<div class="card"><p class="muted">Önümüzdeki 48 saat içinde listelenen maç yok. Fikstür eski olabilir; “Verileri güncelle”ye dokunun.</p></div>`;
+  const now = Date.now(), all = st.db.upcoming.filter((g) => { const t = Date.parse(g.utc); return t > now - 3 * 3600e3 && t < now + 48 * 3600e3; }).sort((a, b) => Date.parse(a.utc) - Date.parse(b.utc));
+  const list = all.filter((g) => { const p = B.predict(st.model, g.home, g.away).pHome; return Math.max(p, 1 - p) >= st.min; });
+  $('#b-body').innerHTML = chips() + (list.length ? `<p class="muted" style="margin:0 4px 10px">${all.length} maçın ${list.length} tanesi bu eşiğin üstünde.</p>` + list.map((g) => card(g.home, g.away, trTime(g.utc))).join('')
+    : `<div class="card"><p class="muted">${all.length ? `Önümüzdeki 48 saatteki ${all.length} maçın hiçbiri bu eşiğin üstünde değil. Daha düşük bir eşik seçin.` : 'Önümüzdeki 48 saat içinde listelenen maç yok. Fikstür eski olabilir; “Verileri güncelle”ye dokunun.'}</p></div>`);
+  bindChips(tabGames);
+}
+function tabResults() {
+  const days = B.recent(st.model).map((d) => ({ ...d, games: d.games.filter((g) => g.conf >= st.min) }));
+  let n = 0, k = 0; for (const d of days) for (const g of d.games) { n++; k += g.hit ? 1 : 0; }
+  const day = (iso) => new Intl.DateTimeFormat('tr-TR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(iso + 'T12:00:00Z'));
+  $('#b-body').innerHTML = chips() + `<div class="card"><h2>Son ${days.length} maç günü <span class="tag">${n ? `${n} tahminin ${k} tanesi tuttu` : 'tahmin yok'}</span></h2>
+    <p class="muted" style="margin:0">Her satır, modelin o maçtan <b>önceki</b> bilgilerle verdiği tahmini ve gerçek sonucu gösterir. <span class="ok">✓</span> favori kazandı, <span class="no">✗</span> kaybetti. Tarihler ABD takvimine göredir; maçlar Türkiye’de ertesi sabaha denk gelir. Dünkü maçları görmek için önce “Verileri güncelle”ye dokunun.</p></div>`
+    + days.map((d) => { const kk = d.games.filter((g) => g.hit).length; return `<div class="card"><h2>${day(d.date)} <span class="tag">${d.games.length ? `${kk} / ${d.games.length} tuttu` : 'bu eşikte maç yok'}</span></h2>
+      ${d.games.map((g) => `<div class="res"><span class="mark ${g.hit ? 'ok' : 'no'}">${g.hit ? '✓' : '✗'}</span><div class="grow"><b>${esc(tn(g.away))} ${g.ap} – ${g.hp} ${esc(tn(g.home))}</b>
+        <div class="muted">Tahmin: ${esc(g.pick)} ${pct(g.conf, 0)} · fark ${num(Math.abs(g.margin))} · toplam ${num(g.total, 0)} (gerçek ${g.actualTotal})</div></div></div>`).join('')}</div>`; }).join('');
+  bindChips(tabResults);
 }
 function tabMatch() {
   const teams = Object.keys(st.db.teams).filter((t) => st.model.elo.has(t)).sort((a, b) => tn(a).localeCompare(tn(b), 'tr'));
