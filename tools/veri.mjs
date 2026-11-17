@@ -54,13 +54,13 @@ function finish(meta, seasons, upcoming, extra = {}) {
     const min = uniq.length > 60 ? 3 : 1;
     clean[y] = uniq.filter((g) => cnt.get(g[1]) >= min && cnt.get(g[2]) >= min).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
   }
-  const up = upcoming.filter((u) => u[0] >= new Date(NOW.getTime() - 3 * 3600e3).toISOString() && u[0] <= addDays(NOW, AHEAD).toISOString()).sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  const up = upcoming.filter((u) => u[0] >= new Date(NOW.getTime() - 3 * 3600e3).toISOString() && u[0] <= addDays(NOW, meta.ahead || AHEAD).toISOString()).sort((a, b) => (a[0] < b[0] ? -1 : 1));
   // model ayarlari bu ligin kendi gecmisiyle secilir (ileriye donuk test, log kayip); telefon bunlari hazir kullanir
   let params = null;
   try { const all = Object.keys(clean).sort().flatMap((y) => clean[y]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)); const t = tune(all);
     params = { o: { half: t.o.half, lam: t.o.lam, prevW: t.o.prevW }, sigma: Math.round(t.sigma * 100) / 100, ll: t.sc ? Math.round(t.sc.logloss * 1e4) / 1e4 : null, acc: t.sc ? Math.round(t.sc.acc * 1e3) / 1e3 : null, n: t.sc?.n || 0 }; }
   catch (e) { console.warn(meta.id, 'ayar secilemedi', e.message); }
-  const file = { v: V, ...meta, updated: NOW.toISOString(), seasons: clean, upcoming: up, params, ...extra };
+  const file = { v: V, id: meta.id, name: meta.name, country: meta.country, updated: NOW.toISOString(), seasons: clean, upcoming: up, params, ...extra };
   writeJson(`b/${meta.id}.json`, file);
   const n = Object.values(clean).reduce((s, l) => s + l.length, 0);
   console.log(`${meta.id}: ${n} mac (${Object.entries(clean).map(([y, l]) => y + ':' + l.length).join(' ')}), ${up.length} yaklasan, ayar ${JSON.stringify(params)}`);
@@ -129,7 +129,7 @@ async function espnLeague(l) {
 }
 
 /* ---------------- EuroLeague / EuroCup ---------------- */
-const EL_LEAGUES = [{ id: 'euroleague', name: 'EuroLeague', country: 'Avrupa', code: 'E' }, { id: 'eurocup', name: 'EuroCup', country: 'Avrupa', code: 'U' }];
+const EL_LEAGUES = [{ id: 'euroleague', name: 'EuroLeague', country: 'Avrupa', code: 'E', ahead: 45 }, { id: 'eurocup', name: 'EuroCup', country: 'Avrupa', code: 'U', ahead: 45 }];
 async function euroLeague(l) {
   const prev = readJson(`b/${l.id}.json`, null), seasons = { ...(prev?.seasons || {}) }, cur = NOW.getUTCMonth() >= 6 ? NOW.getUTCFullYear() : NOW.getUTCFullYear() - 1, upcoming = [];
   for (const y of [cur - 2, cur - 1, cur]) {
@@ -151,11 +151,11 @@ async function euroLeague(l) {
 /* ---------------- FIBA kupalari (Sampiyonlar Ligi, FIBA Europe Cup) ---------------- */
 // Resmi FIBA veri API'si uyelik istiyor; ayni mac listesi herkese acik takvim sayfalarinin icindeki veride duruyor (Next.js).
 const FIBA_LEAGUES = [
-  { id: 'bcl', name: 'FIBA Şampiyonlar Ligi (BCL)', country: 'Avrupa', neutralRounds: ['SF', '3PG', 'F'], pages: {
+  { id: 'bcl', name: 'FIBA Şampiyonlar Ligi (BCL)', country: 'Avrupa', ahead: 45, neutralRounds: ['SF', '3PG', 'F'], pages: {
     2024: 'https://www.fiba.basketball/en/history/112-fiba-mens-european-club-competitions-tier-1/208850/games',
     2025: 'https://www.fiba.basketball/en/history/112-fiba-mens-european-club-competitions-tier-1/208962/games',
     2026: 'https://www.championsleague.basketball/en/games' } },
-  { id: 'fec', name: 'FIBA Europe Cup', country: 'Avrupa', neutralRounds: [], pages: {
+  { id: 'fec', name: 'FIBA Europe Cup', country: 'Avrupa', ahead: 45, neutralRounds: [], pages: {
     2024: 'https://www.fiba.basketball/en/events/fiba-europe-cup-24-25/games',
     2025: 'https://www.fiba.basketball/en/events/fiba-europe-cup-25-26/games',
     2026: 'https://www.fiba.basketball/en/events/fiba-europe-cup-26-27/games' } },
