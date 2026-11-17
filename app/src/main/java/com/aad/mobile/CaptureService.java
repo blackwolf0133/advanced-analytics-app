@@ -39,6 +39,8 @@ import android.widget.TextView;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Ekran okuma servisi. Kullanicinin verdigi ekran kaydi izniyle ekrani bir ImageReader'a yansitir ve oyunun ustunde
@@ -381,6 +383,43 @@ public class CaptureService extends Service {
                 }
             }
             return pack(out, w, h);
+        }
+
+        /** Yuzen pencerenin ekrandaki yeri: "x,y,genislik,yukseklik" (okunan seridi kapatip kapatmadigini bilmek icin). */
+        @JavascriptInterface
+        public String winRect() {
+            final int[] r = new int[4];
+            final CountDownLatch done = new CountDownLatch(1);
+            main.post(() -> {
+                if (root != null && !"full".equals(mode)) {
+                    int[] p = new int[2];
+                    root.getLocationOnScreen(p);
+                    r[0] = p[0];
+                    r[1] = p[1];
+                    r[2] = root.getWidth();
+                    r[3] = root.getHeight();
+                }
+                done.countDown();
+            });
+            try {
+                done.await(300, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            return r[0] + "," + r[1] + "," + r[2] + "," + r[3];
+        }
+
+        /** Pencereyi dikeyde kaydirir (okunan seridin ustunden cekmek icin). */
+        @JavascriptInterface
+        public void moveBy(int dx, int dy) {
+            main.post(() -> {
+                if (root == null || "full".equals(mode)) return;
+                params.x += dx;
+                params.y += dy;
+                miniX = params.x;
+                miniY = params.y;
+                windows.updateViewLayout(root, params);
+            });
         }
 
         @JavascriptInterface

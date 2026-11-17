@@ -74,6 +74,20 @@ function refit(c) {
   say('Şerit kaymış; yeri yeniden bulundu. Okuma sürüyor.'); return true;
 }
 
+/**
+ * Ekran kaydinda bu pencere de gorunur: okunan hucrelerin ustune gelirse sayilar bozuk okunur ve takip durur.
+ * Oyle olursa pencere seridin hemen altina (sigmazsa ustune) cekilir. Donus: 'moved' | 'blocked' | ''.
+ */
+function clearView(c, n) {
+  if (!Native.winRect) return '';
+  const [wx, wy, ww, wh] = String(Native.winRect() || '').split(',').map(Number); if (!(ww > 0 && wh > 0)) return '';
+  const b = newestRects(c, n), x0 = c.l + b.x0, x1 = c.l + b.x1, y0 = c.t + b.y0, y1 = c.t + b.y1, m = Math.round(8 * c.sw / 1080);
+  if (wx >= x1 || wx + ww <= x0 || wy >= y1 + m || wy + wh <= y0 - m) return '';
+  const gap = Math.round(52 * c.sw / 1080), opts = [y1 + gap, y0 - gap - wh].filter((y) => y >= 0 && y + wh <= c.sh).map((y) => y - wy).sort((a, b2) => Math.abs(a) - Math.abs(b2));
+  if (!opts.length) return 'blocked';
+  Native.moveBy(0, opts[0]); return 'moved';
+}
+
 /* ---------------- kucuk pencere ---------------- */
 function render() {
   const s = activeSession(loadRoulette());
@@ -106,6 +120,10 @@ function tick() {
   const n = Math.min(TRACK, c.rows * c.cols), grab = (l, t, w, h) => Native.grabRaw(l, t, w, h);
   st.busy = true;
   try {
+    const cv = clearView(c, st.tracker ? n : c.rows * c.cols);
+    if (cv === 'moved') { st.tracker = null; st.first = null; st.bad = 0; st.moved = true; say('Pencere okunan sayıların üstündeydi; kenara çekildi. Okuma sürüyor.'); return; }
+    if (cv === 'blocked') { say('Pencere okunan sayıları kapatıyor; lütfen sürükleyip şeritten uzaklaştırın.'); return; }
+    if (st.moved) { st.moved = false; st.fixAt = 0; if (refit(c)) return; }    // pencere kapatirken olculen serit duzeni yenilenir
     if (!st.tracker) {
       if (s.spins.length === 0 && c.rows * c.cols > 1) {          // bos oturum: tablodaki gecmis iki kez okunur, ayni cikanlar aktarilir
         const a = readNewest(c, c.rows * c.cols, grab);
