@@ -7,7 +7,7 @@ import { viewFootball } from './footballui.js';
 import * as AI from './aiui.js';
 import { onHttp } from './net.js';
 
-const VERSION = '0.8.2';
+const VERSION = '0.8.3';
 const st = { view: 'roulette', db: null, lastPred: undefined, armed: null, cap: 'off' };
 const TITLES = { roulette: 'Rulet', football: 'Futbol', basket: 'Basketbol', settings: 'Ayarlar' };
 

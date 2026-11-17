@@ -53,3 +53,13 @@ test('takip: tek hucre yanlis okununca yeni sayi kacmaz, iki uyumsuzlukta kaydir
   const tr = new Tracker([2, 1, 26, 31, 12]); tr.feed([35, 2, 1, 26, 12]); const r = tr.feed([35, 2, 1, 26, 12]);
   assert.deepStrictEqual(r.fresh, [35]);
 });
+import { frameCells } from '../src/geom.js';
+test('cerceve: duzen ve en yeni sayi goruntuden (Mega Rulet SON 500; Lightning panelinde ustteki buyuk serit once gelir)', () => {
+  const ld = (f) => { const p = PNG.sync.read(fs.readFileSync(new URL(`./fixtures/${f}.png`, import.meta.url))); return fromRGBA(p.data, p.width, p.height); };
+  const cases = [['mega_son500', [20, 700, 1040, 1400], { x0: 252, y0: 1500, x1: 750, y1: 2172 }, [29, 4, 27, 21]], ['mega_son500', [60, 740, 960, 300], null, [29, 4, 27, 21, 34]],
+    ['rulet_ortu', [0, 600, 1080, 1300], { x0: 390, y0: 45, x1: 890, y1: 715 }, [31, 36, 23, 27, 15, 35, 34, 13, 9, 13, 13, 21, 0, 1]], ['lightning_telefon', [0, 230, 1080, 110], null, [23, 30, 2, 23, 28]]];
+  for (const [f, r, w, want] of cases) {
+    const im = ld(f), img = sub(im, r[0], r[1], r[0] + r[2], r[1] + r[3]), m = w && [{ x0: w.x0 - r[0], y0: w.y0 - r[1], x1: w.x1 - r[0], y1: w.y1 - r[1] }], g = frameCells(img, 'first', m);
+    assert.ok(g, f); assert.deepStrictEqual(readRects(img, { rects: g.cells.slice(0, want.length), x0: 0, y0: 0 }), want, `${f} ${r}`);
+  }
+});

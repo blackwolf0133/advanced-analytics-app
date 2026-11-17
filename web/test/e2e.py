@@ -42,9 +42,9 @@ try:
         ov.click('[data-a="flip"]')                                 # cubuk tablonun ustunu kapatmasin
         sc = ov.evaluate("Math.min(innerWidth / 1657, innerHeight / 580)"); ox = ov.evaluate("(innerWidth - 1657 * Math.min(innerWidth / 1657, innerHeight / 580)) / 2"); oy = ov.evaluate("(innerHeight - 580 * Math.min(innerWidth / 1657, innerHeight / 580)) / 2")
         ov.mouse.move(ox + 1270 * sc, oy + 200 * sc); ov.mouse.down(); ov.mouse.move(ox + 1590 * sc, oy + 522 * sc, steps=6); ov.mouse.up()
-        ov.click('[data-a="test"]'); ov.wait_for_function("document.querySelector('#hint').textContent.includes('hücreden')", timeout=20000)
-        hint = ov.inner_text("#hint"); print("dene:", hint[:60]); ov.screenshot(path="/tmp/phone_picker.png")
-        ok = int(hint.split("hücreden ")[1].split(" ")[0]); assert ok >= 86, hint       # parmakla cizilen kutu: birkac hucre okunamayabilir
+        ov.wait_for_function("document.querySelector('#hint').textContent.includes('Tablo bulundu')", timeout=20000)   # cizince kendisi okur
+        hint = ov.inner_text("#hint"); print("dene:", hint[:90]); ov.screenshot(path="/tmp/phone_picker.png")
+        ok = int(hint.split("Tablo bulundu: ")[1].split(" ")[0]); assert ok >= 86, hint       # cerceve: duzen ve en yeni sayi kendiliginden
         ov.click('[data-a="save"]'); cfg = json.loads(ov.evaluate("localStorage.getItem('aad.screen')")); print("bolge:", cfg)
         ov.click("#run"); ov.wait_for_function("document.querySelector('#status').textContent.includes('aktarıldı')", timeout=30000)
         print("durum:", ov.inner_text("#status"))

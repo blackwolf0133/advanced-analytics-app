@@ -27,8 +27,8 @@ try:
         wait(); print("tablo:", ov.inner_text("#hint")[:40]); ov.screenshot(path="/tmp/hist_grid.png"); assert ov.inner_text("#hint").startswith("65 sayı okundu"), ov.inner_text("#hint")
         ov.click("#saveb"); print("durum:", ov.inner_text("#status"))
         assert spins(ov) == (STRIP + GRID[2:])[::-1], spins(ov)
-        ov.click("#run"); ov.wait_for_function("document.body.classList.contains('full')"); ov.wait_for_function("!document.querySelector('#hint').textContent.includes('alınıyor')")   # takip bolgesi yok: secim acilir
-        ov.mouse.click(180, oy + 282 * sc); ov.wait_for_function("document.querySelector('#hint').textContent.includes('hücreden')", timeout=30000); ov.click("#saveb")
+        # takip bolgesi secilmediyse Gecmis'te cizilen tablo cercevesi kullanilir; en yeni sayi orada kendiliginden bulunur
+        assert ov.evaluate("localStorage.getItem('aad.screen')") is None
         ov.click("#run"); ov.wait_for_function("document.querySelector('#status').textContent.includes('başladı')", timeout=30000); print("durum:", ov.inner_text("#status"))
         assert len(spins(ov)) == 77
         print("hatalar:", errs); b.close()
