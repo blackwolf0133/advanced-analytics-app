@@ -1,23 +1,30 @@
-// FIBA kupalari (BCL, FIBA Europe Cup): herkese acik mac takvimi sayfalarindaki mac nesneleri
+// Futbol: ESPN tum ligler gunluk skor tablosu, lig listesi, devre skorlari, canli alanlar
 import fs from 'node:fs';
 const out = 'probe-out'; fs.mkdirSync(out, { recursive: true });
 const UA = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36';
-const PUSH = /self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)/gs;
-function games(html) {
-  let text = ''; for (const m of html.matchAll(PUSH)) { try { text += JSON.parse('"' + m[1] + '"'); } catch {} }
-  if (!text) text = html.replace(/\\"/g, '"');
-  const seen = new Map(), re = /\{"gameId":/g; let m;
-  while ((m = re.exec(text))) { let depth = 0, i = m.index, inS = false, esc = false;
-    for (; i < text.length; i++) { const ch = text[i]; if (inS) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inS = false; continue; } if (ch === '"') inS = true; else if (ch === '{') depth++; else if (ch === '}') { depth--; if (!depth) break; } }
-    try { const o = JSON.parse(text.slice(m.index, i + 1)); if (o.teamA && !seen.has(o.gameId)) seen.set(o.gameId, o); } catch {} }
-  return [...seen.values()];
-}
-const pages = { bcl_2627: 'https://www.championsleague.basketball/en/games', bcl_2526: 'https://www.fiba.basketball/en/history/112-fiba-mens-european-club-competitions-tier-1/208962/games',
-  fec_2627: 'https://www.fiba.basketball/en/events/fiba-europe-cup-26-27/games', fec_2526: 'https://www.fiba.basketball/en/events/fiba-europe-cup-25-26/games' };
 const rep = {};
-for (const [k, u] of Object.entries(pages)) {
-  try { const r = await fetch(u, { headers: { 'User-Agent': UA, 'Accept-Language': 'en' }, signal: AbortSignal.timeout(40000) }); const h = await r.text(); const g = games(h);
-    rep[k] = { status: r.status, size: h.length, games: g.length, played: g.filter((x) => (x.teamAScore || 0) + (x.teamBScore || 0) > 0).length, keys: g[0] ? Object.keys(g[0]) : [], sample: g.slice(0, 2), rounds: [...new Set(g.map((x) => x.round?.roundCode))], dates: [g.map((x) => x.gameDateTime).sort()[0], g.map((x) => x.gameDateTime).sort().at(-1)] };
-    fs.writeFileSync(`${out}/${k}.json`, JSON.stringify(g)); } catch (e) { rep[k] = { error: String(e) }; }
+async function get(name, url) {
+  try { const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(40000) }); const t = await r.text(); rep[name] = { status: r.status, size: t.length }; if (r.ok) fs.writeFileSync(`${out}/${name}`, t); return r.ok ? t : null; }
+  catch (e) { rep[name] = { error: String(e) }; return null; }
 }
-fs.writeFileSync(`${out}/report.json`, JSON.stringify(rep, null, 1)); console.log(JSON.stringify(Object.fromEntries(Object.entries(rep).map(([k, v]) => [k, { status: v.status, games: v.games, played: v.played, rounds: v.rounds, dates: v.dates, error: v.error }]))));
+const S = 'https://site.api.espn.com/apis/site/v2/sports/soccer/';
+const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+await get('all_today.json', S + `all/scoreboard?dates=${today}`);
+await get('all_today_lim.json', S + `all/scoreboard?dates=${today}&limit=1000`);
+await get('all_past.json', S + 'all/scoreboard?dates=20261108');
+await get('dropdown.json', 'https://site.api.espn.com/apis/site/v2/leagues/dropdown?sport=soccer&limit=1000');
+await get('core_leagues.json', 'https://sports.core.api.espn.com/v2/sports/soccer/leagues?limit=1000');
+await get('eng5.json', S + 'eng.5/scoreboard?dates=20261108');
+await get('eng1_past.json', S + 'eng.1/scoreboard?dates=20261108');
+await get('cdn_all.json', `https://cdn.espn.com/core/soccer/scoreboard?xhr=1&league=all&date=${today}`);
+await get('concacaf_nl.json', S + `concacaf.nations.league/scoreboard?dates=${today}`);
+await get('caf_q.json', S + `caf.nations_qual/scoreboard?dates=${today}`);
+await get('friendly.json', S + `fifa.friendly/scoreboard?dates=${today}`);
+const summ = {};
+for (const f of ['all_today.json', 'all_today_lim.json', 'all_past.json', 'eng5.json', 'eng1_past.json']) {
+  try { const j = JSON.parse(fs.readFileSync(`${out}/${f}`)); const ev = j.events || []; const lg = {};
+    for (const e of ev) { const s = e.season?.slug || ''; const l = (e.competitions?.[0]?.league?.slug) || e.league?.slug || (e.uid || '').split('~')[1]; lg[l] = (lg[l] || 0) + 1; }
+    const c = ev[0]?.competitions?.[0]; summ[f] = { events: ev.length, leaguesTop: Object.entries(lg).slice(0, 60), leaguesObj: (j.leagues || []).length, sampleComp: c ? { status: c.status, comp0: { ...c.competitors[0], team: c.competitors[0].team?.displayName }, keys: Object.keys(c), evKeys: Object.keys(ev[0]) } : null };
+  } catch (e) { summ[f] = String(e); }
+}
+fs.writeFileSync(`${out}/report.json`, JSON.stringify({ rep, summ }, null, 1)); console.log(JSON.stringify(rep));
