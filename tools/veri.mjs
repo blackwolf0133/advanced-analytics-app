@@ -34,7 +34,8 @@ async function pool(items, n, fn) {
   await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (k < items.length) { const i = k++; out[i] = await fn(items[i], i); } }));
   return out;
 }
-const readJson = (f, d) => { try { return JSON.parse(fs.readFileSync(path.join(OUT, f), 'utf8')); } catch { return d; } };
+const V = 2;                                        // dosya bicimi surumu: degisirse eski veri yok sayilir ve bastan toplanir
+const readJson = (f, d) => { try { const j = JSON.parse(fs.readFileSync(path.join(OUT, f), 'utf8')); return j && j.v === V ? j : d; } catch { return d; } };
 const writeJson = (f, v) => { const p = path.join(OUT, f); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, JSON.stringify(v)); };
 const trTitle = (s) => String(s || '').trim().toLocaleLowerCase('tr-TR').replace(/(^|[\s.\-/(])(\p{L})/gu, (m, a, b) => a + b.toLocaleUpperCase('tr-TR'));
 
@@ -43,6 +44,7 @@ const trTitle = (s) => String(s || '').trim().toLocaleLowerCase('tr-TR').replace
  * Tarih UTC gunudur (YYYY-MM-DD). Sezon, basladigi yildir (2026 = 2026-27).
  */
 function finish(meta, seasons, upcoming, extra = {}) {
+  if (extra.done === undefined) extra.done = {};
   const clean = {};
   for (const [y, list] of Object.entries(seasons)) {
     // ayni mac iki kez gelmesin; sezonda 3'ten az maci olan takimlarin maclari (gosteri maclari, alt lig konuklari) cikarilir
@@ -52,7 +54,7 @@ function finish(meta, seasons, upcoming, extra = {}) {
     clean[y] = uniq.filter((g) => cnt.get(g[1]) >= min && cnt.get(g[2]) >= min).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
   }
   const up = upcoming.filter((u) => u[0] >= new Date(NOW.getTime() - 3 * 3600e3).toISOString() && u[0] <= addDays(NOW, AHEAD).toISOString()).sort((a, b) => (a[0] < b[0] ? -1 : 1));
-  const file = { ...meta, updated: NOW.toISOString(), seasons: clean, upcoming: up, ...extra };
+  const file = { v: V, ...meta, updated: NOW.toISOString(), seasons: clean, upcoming: up, ...extra };
   writeJson(`b/${meta.id}.json`, file);
   const n = Object.values(clean).reduce((s, l) => s + l.length, 0);
   console.log(`${meta.id}: ${n} mac (${Object.entries(clean).map(([y, l]) => y + ':' + l.length).join(' ')}), ${up.length} yaklasan`);
@@ -107,8 +109,9 @@ async function espnLeague(l) {
   const got = await pool(want, 6, async ([y, d]) => ({ y, d, j: await get(SB(l, d)) }));
   for (const { y, d, j } of got) {
     if (!j) continue;
-    const r = espnEvents(j, y), key = String(y);
-    seasons[key] = (seasons[key] || []).filter((g) => !(g[0] === d || r.games.some((x) => x[1] === g[1] && x[2] === g[2] && x[0] === g[0]))).concat(r.games);
+    // ayni mac (tarih + takimlar) yenisiyle degistirilir; baska gunlerin maclarina dokunulmaz
+    const r = espnEvents(j, y), key = String(y), k = (g) => g[0] + '|' + g[1] + '|' + g[2], fresh = new Set(r.games.map(k));
+    seasons[key] = (seasons[key] || []).filter((g) => !fresh.has(k(g))).concat(r.games);
     upcoming.push(...r.upcoming);
     const allDone = (j.events || []).every((e) => e.status?.type?.completed || e.status?.type?.state === 'post' || /postponed|canceled/i.test(e.status?.type?.name || ''));
     if (allDone && d < ymd(addDays(NOW, -1))) done[key + 'd'] = [...new Set([...(done[key + 'd'] || []), d])];
@@ -167,6 +170,13 @@ async function tbfLeague(l, featured) {
 }
 
 /* ---------------- Milli takimlar (futbol) ---------------- */
+const INTL_SLUGS = ['fifa.friendly', 'uefa.nations', 'uefa.euroq', 'uefa.euro', 'fifa.world', 'fifa.worldq.uefa', 'fifa.worldq.conmebol', 'fifa.worldq.concacaf', 'fifa.worldq.afc',
+  'fifa.worldq.caf', 'concacaf.nations.league', 'concacaf.gold', 'conmebol.america', 'caf.nations', 'caf.nations_qual', 'afc.asian.cup', 'afc.cupq'];
+// ESPN adi -> veri setindeki ad
+const ALIAS = { 'Türkiye': 'Turkey', 'USA': 'United States', 'Czechia': 'Czech Republic', 'Korea Republic': 'South Korea', 'IR Iran': 'Iran', "Côte d'Ivoire": 'Ivory Coast', 'Cabo Verde': 'Cape Verde',
+  'Republic of Ireland': 'Republic of Ireland', 'North Macedonia': 'North Macedonia', 'Bosnia-Herzegovina': 'Bosnia and Herzegovina', 'Congo DR': 'DR Congo', 'China PR': 'China', 'Korea DPR': 'North Korea',
+  'Kyrgyz Republic': 'Kyrgyzstan', 'Curacao': 'Curaçao', 'Chinese Taipei': 'Taiwan', 'St. Kitts and Nevis': 'Saint Kitts and Nevis', 'St. Lucia': 'Saint Lucia', 'St. Vincent and the Grenadines': 'Saint Vincent and the Grenadines',
+  'Eswatini': 'Eswatini', 'The Gambia': 'Gambia', 'Gambia': 'Gambia', 'Sao Tome and Principe': 'São Tomé and Príncipe', 'United States Virgin Islands': 'United States Virgin Islands' };
 async function intl() {
   const t = await get('https://raw.githubusercontent.com/martj42/international_results/master/results.csv', { json: false });
   if (!t) { console.warn('milli: alinamadi'); return null; }
@@ -178,7 +188,20 @@ async function intl() {
     if (c[3] === 'NA' || c[3] === '') { if (c[0] >= today && c[0] <= ymd(addDays(NOW, 40))) upcoming.push([c[0], c[1], c[2], c[5], neutral]); }
     else if (Number.isFinite(hs) && Number.isFinite(as)) games.push([c[0], c[1], c[2], hs, as, c[5], neutral]);
   }
-  writeJson('milli.json', { updated: NOW.toISOString(), source: 'martj42/international_results (CC0)', games, upcoming });
+  // CC0 veri setinde gelecek maclar yok: yaklasan milli maclar ESPN'in turnuva fiksturlerinden alinir (isimler veri setine cevrilir)
+  const names = new Set(games.flatMap((g) => [g[1], g[2]])), fix = (n) => ALIAS[n] || n;
+  const days = Array.from({ length: 21 }, (_, i) => ymd(addDays(NOW, i)).replace(/-/g, ''));
+  const jobs = INTL_SLUGS.flatMap((s) => days.map((d) => [s, d]));
+  const res = await pool(jobs, 6, async ([s, d]) => ({ s, j: await get(`https://site.api.espn.com/apis/site/v2/sports/soccer/${s}/scoreboard?dates=${d}`) }));
+  const seen = new Set();
+  for (const { s, j } of res) for (const e of j?.events || []) {
+    const c = e.competitions?.[0], h = c?.competitors?.find((x) => x.homeAway === 'home'), a = c?.competitors?.find((x) => x.homeAway === 'away');
+    if (!h || !a || e.status?.type?.state !== 'pre') continue;
+    const hn = fix(h.team?.displayName), an = fix(a.team?.displayName), key = e.id; if (seen.has(key) || !names.has(hn) || !names.has(an)) continue; seen.add(key);
+    upcoming.push([new Date(e.date).toISOString(), hn, an, j.leagues?.[0]?.name || s, c.neutralSite ? 1 : 0]);
+  }
+  upcoming.sort((x, y) => (x[0] < y[0] ? -1 : 1));
+  writeJson('milli.json', { v: V, updated: NOW.toISOString(), source: 'martj42/international_results (CC0) + ESPN fikstür', games, upcoming });
   console.log(`milli: ${games.length} mac, ${upcoming.length} yaklasan`);
   return { n: games.length, upcoming: upcoming.length, last: games.reduce((m, g) => (g[0] > m ? g[0] : m), '') };
 }
