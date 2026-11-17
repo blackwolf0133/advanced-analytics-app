@@ -1,0 +1,37 @@
+name: Gunluk veri
+on:
+  schedule:
+    - cron: '17 4 * * *'
+    - cron: '43 15 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [tools/veri.mjs, .github/workflows/veri.yml]
+permissions:
+  contents: write
+concurrency:
+  group: veri
+  cancel-in-progress: false
+jobs:
+  veri:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Onceki veriyi al
+        run: |
+          mkdir -p out
+          if git fetch -q origin veri; then git --work-tree=out checkout origin/veri -- . && git reset -q; fi
+          ls out || true
+      - name: Veriyi topla
+        run: node tools/veri.mjs out
+      - name: veri dalina yaz
+        run: |
+          cd out
+          git init -q -b veri && git config user.name veri-bot && git config user.email veri-bot@users.noreply.github.com
+          printf '# Uygulama verisi\n\nHer gun GitHub Actions ile otomatik guncellenir. Kaynaklar: ESPN, EuroLeague, TBF, martj42/international_results (CC0).\nYalnizca egitim ve eglence amaclidir.\n' > README.md
+          git add -A && git commit -qm "veri $(date -u +%F)"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" veri
