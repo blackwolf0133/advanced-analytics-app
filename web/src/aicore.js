@@ -6,13 +6,14 @@
 
 export const PROVIDERS = [
   { id: 'ovh-gpt', name: 'gpt-oss-120b', host: 'OVHcloud', url: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions', model: 'gpt-oss-120b', key: false, extra: { reasoning_effort: 'low' } },
-  { id: 'ovh-qwen', name: 'Qwen 3.5 (397B)', host: 'OVHcloud', url: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions', model: 'Qwen3.5-397B-A17B', key: false, extra: { chat_template_kwargs: { enable_thinking: false } } },
-  { id: 'kilo', name: 'Kilo ücretsiz model', host: 'Kilo', url: 'https://api.kilo.ai/api/gateway/chat/completions', model: 'kilo-auto/free', key: false },
+  { id: 'ovh-qwen', name: 'Qwen 3.5 (397B)', host: 'OVHcloud', url: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions', model: 'Qwen3.5-397B-A17B', key: false, tokens: 6000 },
+  { id: 'ovh-ds', name: 'DeepSeek V4.1 Flash', host: 'OVHcloud', url: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions', model: 'DeepSeek-V4.1-Flash-1017', key: false },
+  { id: 'kilo', name: 'Kilo ücretsiz model', host: 'Kilo', url: 'https://api.kilo.ai/api/gateway/chat/completions', model: 'kilo-auto/free', key: false, fallback: ['nvidia/nemotron-3.5-lightning:free', 'dots-studio/dots-3-note-preview:free'] },
   { id: 'groq', name: 'gpt-oss-120b', host: 'Groq', url: 'https://api.groq.com/openai/v1/chat/completions', model: 'openai/gpt-oss-120b', key: true, keyUrl: 'console.groq.com/keys', extra: { reasoning_effort: 'low' } },
   { id: 'gemini', name: 'Gemini 2.5 Flash', host: 'Google', url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', model: 'gemini-2.5-flash', key: true, keyUrl: 'aistudio.google.com/app/apikey' },
   { id: 'openrouter', name: 'Nemotron 3.5 (ücretsiz)', host: 'OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', model: 'nvidia/nemotron-3.5-lightning:free', key: true, keyUrl: 'openrouter.ai/keys' },
 ];
-export const DEFAULT_ON = ['ovh-gpt', 'ovh-qwen', 'kilo'];
+export const DEFAULT_ON = ['ovh-gpt', 'ovh-qwen', 'ovh-ds', 'kilo'];
 const LETTERS = 'ABCDEF';
 
 const pctTxt = (x) => `%${Math.round(x * 100)}`;
@@ -67,8 +68,15 @@ function content(json) {
 async function ask(post, prov, key, msgs) {
   const headers = { 'Content-Type': 'application/json' }; if (prov.key) headers.Authorization = 'Bearer ' + key;
   if (prov.id === 'openrouter') { headers['HTTP-Referer'] = 'https://github.com/blackwolf0133/advanced-analytics-app'; headers['X-Title'] = 'Advanced Analytics'; }
-  const body = { model: prov.model, messages: msgs, temperature: 0.4, max_tokens: 3000, ...(prov.extra || {}) };
-  return parseAnswer(content(JSON.parse(await post(prov.url, headers, JSON.stringify(body)))));
+  // yogunluk (429) ya da gecici hata: kisa bekleyip bir kez daha, sonra (varsa) yedek modellerle dene
+  const models = [prov.model, prov.model, ...(prov.fallback || [])]; let err;
+  for (let i = 0; i < models.length; i++) {
+    if (i) await new Promise((ok) => setTimeout(ok, 3500));
+    const body = { model: models[i], messages: msgs, temperature: 0.4, max_tokens: prov.tokens || 3000, ...(prov.extra || {}) };
+    try { return parseAnswer(content(JSON.parse(await post(prov.url, headers, JSON.stringify(body))))); }
+    catch (e) { err = e; if (!/429|50[0-9]|zaman aşımı|timeout|rate|yarıda|boş/i.test(e.message)) break; }
+  }
+  throw err;
 }
 /**
  * Tartisma: 1. tur bagimsiz, 2. tur (en az iki cevap geldiyse) digerlerini gorup son karar. onStep(metin) ilerleme bildirir.
