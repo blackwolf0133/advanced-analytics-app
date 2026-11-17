@@ -3,6 +3,8 @@
 // Ara depo: f/sezon.json (bitmis maclar), f/tahmin.json (mac oncesi kaydedilen tahminler; isabet olcumu icin).
 import { fitGlobal, predictMatch, rates, halfShare } from '../web/src/dcglobal.js';
 import * as F from '../web/src/football.js';
+import { parseEvents } from '../web/src/espn.js';
+export { parseEvents };
 
 const S = 'https://site.api.espn.com/apis/site/v2/sports/soccer/';
 const NATIONAL = /^(fifa\.(world|worldq|wcq|friendly$|concacaf|conmebol)|uefa\.(nations|euroq|euro$)|caf\.nations|concacaf\.(nations|gold|confed)|conmebol\.america$|afc\.(asian\.cup$|cupq)|global\.(finalissima|gulf_cup|arnold))/;
@@ -23,36 +25,6 @@ const PRIORITY = ['tur.1', 'uefa.champions', 'uefa.europa', 'uefa.europa.conf', 
 const ymd = (d) => d.toISOString().slice(0, 10);
 const key = (d) => ymd(d).replace(/-/g, '');
 const r3 = (x) => Math.round(x * 1000) / 1000;
-const minute = (dv) => { const m = /^(\d+)'(\+(\d+))?/.exec(String(dv || '')); return m ? { min: Number(m[1]), plus: m[3] ? Number(m[3]) : 0 } : null; };
-
-/** Bir skor tablosu cevabindaki maclar. */
-export function parseEvents(j, slug, k) {
-  const out = [];
-  for (const e of j?.events || []) {
-    const c = e.competitions?.[0]; if (!c || c.competitors?.length !== 2) continue;
-    const H = c.competitors.find((x) => x.homeAway === 'home'), A = c.competitors.find((x) => x.homeAway === 'away'); if (!H || !A) continue;
-    const t = e.status?.type || c.status?.type || {}, name = t.name || '', state = t.state || 'pre';
-    const row = { id: String(e.id), lg: slug, k, t: new Date(e.date).toISOString(), hid: String(H.team?.id), aid: String(A.team?.id), h: H.team?.displayName || H.team?.name, a: A.team?.displayName || A.team?.name,
-      n: c.neutralSite ? 1 : 0, st: state, sn: name, clock: c.status?.displayClock || e.status?.displayClock || '', det: t.shortDetail || '' };
-    if (!row.h || !row.a || /TBD/i.test(row.h + row.a)) continue;
-    const hs = Number(H.score), as = Number(A.score);
-    if (state !== 'pre' && Number.isFinite(hs) && Number.isFinite(as)) {
-      row.sc = [hs, as];
-      // devre skoru ve 90 dakikalik skor: gol dakikalarindan (penalti atislari haric); toplam tutmazsa kullanilmaz
-      const goals = (c.details || []).filter((d) => d.scoringPlay && !d.shootout), gm = { [row.hid]: [0, 0, 0], [row.aid]: [0, 0, 0] };
-      let ok = true; for (const g of goals) { const tm = String(g.team?.id), mm = minute(g.clock?.displayValue); if (!gm[tm] || !mm) { ok = false; break; } const half = mm.min <= 45 ? 0 : mm.min <= 90 ? 1 : 2; gm[tm][half]++; }
-      const aet = /AET|PEN|EXTRA|OVERTIME|SHOOTOUT/i.test(name);
-      if (ok && goals.length) { const th = gm[row.hid], ta = gm[row.aid];
-        if (th[0] + th[1] + th[2] === hs && ta[0] + ta[1] + ta[2] === as) { row.ht = [th[0], ta[0]]; if (aet) row.ft90 = [th[0] + th[1], ta[0] + ta[1]]; } }
-      else if (ok && !goals.length && hs + as === 0) row.ht = [0, 0];
-      if (aet && !row.ft90 && hs + as === 0) row.ft90 = [0, 0];
-      row.aet = aet ? 1 : 0;
-    }
-    out.push(row);
-  }
-  return out;
-}
-
 export async function futbol({ get, pool, readJson, writeJson, NOW, milliGames, alias }) {
   const V = 2, today = new Date(NOW), D = (n) => new Date(today.getTime() + n * 864e5);
   const prev = readJson('f/sezon.json', null), db = prev && prev.v === V ? prev : { v: V, leagues: {}, done: {}, ev: {} };
@@ -95,19 +67,20 @@ export async function futbol({ get, pool, readJson, writeJson, NOW, milliGames, 
 
   // 3) model: kulup maclari (kuresel), milli maclar (8 yillik acik veri)
   const dayOf = (iso) => Date.parse(iso) / 864e5, rows = Object.entries(db.ev).map(([id, r]) => ({ id, k: r[0], c: r[1], day: dayOf(r[2]), h: r[3], a: r[4], hg: r[10] ? r[11] : r[5], ag: r[10] ? r[12] : r[6], h1: r[7], a1: r[8], n: r[9] }));
-  const clubRows = rows.filter((m) => !NATIONAL.test(m.c) && !MODEL_SKIP.test(m.c) && m.hg != null && m.ag != null);
+  const clubRows = rows.filter((m) => !(NATIONAL.test(m.c) && !NO_MODEL.test(m.c)) && !MODEL_SKIP.test(m.c) && m.hg != null && m.ag != null);
   const fit = (upto) => fitGlobal(clubRows.filter((m) => m.day < upto), { ref: upto });
   const nowDay = today.getTime() / 864e5, M = fit(nowDay + 1), share = halfShare(rows);
   let MM = null;
   if (milliGames?.length) { const ms = milliGames.map(([d, h, a, hg, ag, tour, n]) => [d, h, a, hg, ag, null, null, null, Number(d.slice(0, 4)), n, /friendly/i.test(tour) ? 0.6 : 1]); MM = F.fit(ms); }
   const predictOne = (e, model) => {
-    if (NO_MODEL.test(e.lg) && !NATIONAL.test(e.lg)) return null;
+    if (MODEL_SKIP.test(e.lg)) return null;
     const f = share.get(e.lg) ?? share.get('*');
-    if (NATIONAL.test(e.lg)) {                       // milli maclar: 8 yillik acik veriyle kurulan model (takim adlari ESPN'den cevrilir)
-      if (!MM || NO_MODEL.test(e.lg)) return null;
+    if (NATIONAL.test(e.lg) && !NO_MODEL.test(e.lg)) {   // A milli takimlar: 8 yillik acik veriyle kurulan model (takim adlari ESPN'den cevrilir)
+      if (!MM) return null;
       const pr = F.predict(MM, alias(e.h), alias(e.a), 10, e.n); if (!pr.known) return null;
       return pack(predictMatch(pr.lambda, pr.mu, MM.rho ?? -0.05, f), 9, 9);
     }
+    if (!model) return null;                       // kulupler, kadin ve genc takimlar: ESPN kimlikleriyle kuresel model
     const r = rates(model, e.lg, e.hid, e.aid, e.n); if (r.nh < 2 || r.na < 2) return null;     // takimlardan biri icin yeterli mac yok
     return pack(predictMatch(r.l, r.m, model.rho, f), r.nh, r.na);
   };
@@ -122,7 +95,7 @@ export async function futbol({ get, pool, readJson, writeJson, NOW, milliGames, 
     if (seen.has(e.id)) continue; seen.add(e.id);
     let pr = preds.p[e.id]?.pr || null, bt = 0;
     if (e.st === 'pre') { pr = predictOne(e, M); if (pr) preds.p[e.id] = { pr, t: e.t, lg: e.lg, made: NOW.toISOString() }; }
-    else if (!pr) { pr = predictOne(e, NATIONAL.test(e.lg) ? null : backModel(Math.floor(dayOf(e.t)))); bt = pr ? 1 : 0; if (pr) preds.p[e.id] = { pr, t: e.t, lg: e.lg, made: 'geriye-donuk' }; }
+    else if (!pr) { pr = predictOne(e, backModel(Math.floor(dayOf(e.t)))); bt = pr ? 1 : 0; if (pr) preds.p[e.id] = { pr, t: e.t, lg: e.lg, made: 'geriye-donuk' }; }
     out.push({ id: e.id, lg: e.lg, k: e.k, t: e.t, h: e.h, a: e.a, n: e.n, st: e.st, sn: e.sn, clock: e.clock, det: e.det, r: e.sc || null, r1: e.ht || null, pr, bt });
   }
   // 5) karne: kaydedilen tahminler + sonuclar (son 60 gun)
@@ -136,11 +109,27 @@ export async function futbol({ get, pool, readJson, writeJson, NOW, milliGames, 
     add('*', s); add(rec.lg, s);
   }
   writeJson('f/tahmin.json', preds);
+  // geriye donuk test: model her hafta yalnizca o haftadan onceki maclarla kurulur, sonraki 7 gunun kulup maclarini tahmin eder (son 3 hafta)
+  const test = {}, addT = (k, s) => { const o = test[k] || (test[k] = { n: 0, hit: 0, sc: 0, nht: 0, ht: 0, ll: 0, base: 0 }); o.n++; o.hit += s.hit; o.sc += s.sc; o.ll += s.ll; o.base += s.base; if (s.ht != null) { o.nht++; o.ht += s.ht; } };
+  for (const w of [21, 14, 7]) {
+    const cut = Math.floor(nowDay) - w, Mw = fit(cut), shareW = halfShare(rows.filter((m) => m.day < cut));
+    const freq = [0, 0, 0]; for (const m of clubRows) if (m.day < cut && m.day >= cut - 60) freq[m.hg > m.ag ? 0 : m.hg === m.ag ? 1 : 2]++;
+    const fs = freq.map((x) => (x + 1) / (freq[0] + freq[1] + freq[2] + 3));
+    for (const m of clubRows) {
+      if (m.day < cut || m.day >= cut + 7) continue;
+      const r = rates(Mw, m.c, m.h, m.a, m.n); if (r.nh < 4 || r.na < 4) continue;
+      const pr = predictMatch(r.l, r.m, Mw.rho, shareW.get(m.c) ?? shareW.get('*')), y = m.hg > m.ag ? 0 : m.hg === m.ag ? 1 : 2, pk = pr.p.indexOf(Math.max(...pr.p));
+      const s = { hit: pk === y ? 1 : 0, sc: pr.top[0][0] === m.hg && pr.top[0][1] === m.ag ? 1 : 0, ll: -Math.log(Math.max(0.005, pr.p[y])), base: -Math.log(fs[y]), ht: null };
+      if (m.h1 != null) { const yh = m.h1 > m.a1 ? 0 : m.h1 === m.a1 ? 1 : 2; s.ht = pr.ht.indexOf(Math.max(...pr.ht)) === yh ? 1 : 0; }
+      addT('*', s); addT(m.c, s);
+    }
+  }
   const lgOut = {}; for (const [slug, L] of Object.entries(db.leagues)) { const pre = slug.split('.')[0];
     lgOut[slug] = { name: L.name, en: L.en, ulke: COUNTRY[pre] || 'Diğer', nat: L.nat, f: r3(share.get(slug) ?? share.get('*')), pri: PRIORITY.includes(slug) ? PRIORITY.indexOf(slug) : 99 }; }
-  const karne = Object.fromEntries(Object.entries(stat).map(([k, o]) => [k, { n: o.n, hit: r3(o.hit / o.n), sc: r3(o.sc / o.n), ht: o.nht ? r3(o.ht / o.nht) : null, nht: o.nht, ll: r3(o.ll / o.n) }]));
+  const sum = (o) => ({ n: o.n, hit: r3(o.hit / o.n), sc: r3(o.sc / o.n), ht: o.nht ? r3(o.ht / o.nht) : null, nht: o.nht, ll: r3(o.ll / o.n), ...(o.base != null ? { base: r3(o.base / o.n) } : {}) });
+  const karne = { live: Object.fromEntries(Object.entries(stat).map(([k, o]) => [k, sum(o)])), test: Object.fromEntries(Object.entries(test).map(([k, o]) => [k, sum(o)])) };
   writeJson('f/gun.json', { v: V, updated: NOW.toISOString(), leagues: lgOut, matches: out, karne, rho: M.rho, f: r3(share.get('*')) });
   const np = out.filter((m) => m.pr).length;
-  console.log(`futbol: ${Object.keys(db.ev).length} bitmis mac (${clubRows.length} kulup), pencere ${out.length} mac (${np} tahminli), ilk yari payi ${r3(share.get('*'))}, rho ${M.rho}, karne ${JSON.stringify(karne['*'] || null)}`);
+  console.log(`futbol: ${Object.keys(db.ev).length} bitmis mac (${clubRows.length} kulup), pencere ${out.length} mac (${np} tahminli), ilk yari payi ${r3(share.get('*'))}, rho ${M.rho}, gercek ${JSON.stringify(karne.live['*'] || null)}, test ${JSON.stringify(karne.test['*'] || null)}`);
   return { n: Object.keys(db.ev).length, window: out.length, predicted: np };
 }
