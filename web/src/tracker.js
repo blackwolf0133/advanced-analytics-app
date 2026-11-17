@@ -6,9 +6,13 @@ export const TRACK = 5, STABLE = 2, RESYNC = 8;
 export function shift(old, cur) {
   const n = cur.length;
   if (n === 1) return cur[0] === null ? null : (cur[0] !== old[0] ? 1 : 0);
-  const fits = (k) => { let any = false; for (let i = k; i < n; i++) { const a = cur[i], b = old[i - k]; if (a === null || b === null) continue; if (a !== b) return false; any = true; } return any; };
-  if (fits(0)) return 0;
-  for (let k = 1; k < n; k++) if (fits(k) && cur.slice(0, k).every((v) => v !== null)) return k;
+  // bir hucre bir an yanlis okunsa da (yeni sayi kayarken, video arkadan parlarken) takip durmasin:
+  // once tam uyum aranir; yoksa en az 3 eslesme varken tek bir uyumsuzluga goz yumulur
+  const fits = (k, tol) => { let ok = 0, bad = 0; for (let i = k; i < n; i++) { const a = cur[i], b = old[i - k]; if (a === null || b === null) continue; if (a !== b) bad++; else ok++; } return tol ? bad <= 1 && ok >= 3 : bad === 0 && ok > 0; };
+  for (const tol of [false, true]) {
+    if (fits(0, tol)) return 0;
+    for (let k = 1; k < n; k++) if (fits(k, tol) && cur.slice(0, k).every((v) => v !== null)) return k;
+  }
   return null;
 }
 export const merge = (old, cur, k) => cur.map((v, i) => (v !== null ? v : i >= k ? old[i - k] : null));

@@ -29,3 +29,27 @@ test('otomatik hizalama: seride kabaca dokunmak yeter (iki gercek telefon ekrani
     assert.deepStrictEqual(got, want.slice(0, 13), `dokunma ${tap} -> t=${a.t} h=${a.h}`); if (off === 0) console.log('  hizalama', Date.now() - t0, 'ms, t =', a.t, 'h =', a.h);
   }
 });
+import { fitStrip } from '../src/geom.js';
+import { shift, Tracker } from '../src/tracker.js';
+test('kutu duzeni goruntuden olculur: ust serit (14 sayi, kenar bosluksuz) ve istatistik paneli (12 sayi, kenar boslukli)', () => {
+  const cases = [['rulet_panel_a', [21, 16, 35, 2, 1, 26, 31, 12, 36, 3, 3, 11, 23, 29]], ['rulet_panel_b', [35, 2, 1, 26, 31, 12, 36, 3, 3, 11, 23, 29, 33, 26]]];
+  for (const [f, seq] of cases) {
+    const p = PNG.sync.read(fs.readFileSync(new URL(`./fixtures/${f}.png`, import.meta.url))), im = fromRGBA(p.data, p.width, p.height);
+    for (const [t, cols] of [[257, 14], [725, 12]]) {
+      const c = fitStrip(sub(im, 0, t, im.w, t + 50)); assert.ok(c, `${f} ${t}`); assert.strictEqual(c.cols, cols, `${f} ${t}: ${JSON.stringify(c)}`);
+      const cc = { ...c, t, h: 50, rows: 1, newest: 'first' }, b = newestRects(cc, c.cols);
+      assert.deepStrictEqual(readRects(sub(im, cc.l + b.x0, t + b.y0, cc.l + b.x1, t + b.y1), b), seq.slice(0, cols), `${f} ${t}`);
+    }
+  }
+});
+test('takip: tek hucre yanlis okununca yeni sayi kacmaz, iki uyumsuzlukta kaydirma yapilmaz', () => {
+  // gercek ekrandaki olay: 35 geldi ama 5. hucre 31 yerine 12 okundu
+  assert.strictEqual(shift([2, 1, 26, 31, 12], [35, 2, 1, 26, 12]), 1);
+  assert.strictEqual(shift([2, 1, 26, 31, 12], [35, 2, 1, null, 12]), null);   // 2 eslesme + 1 hata: emin degil, sonraki okumayi bekler
+  assert.strictEqual(shift([2, 1, 26, 31, 12], [35, 2, 9, 26, 31]), 1);
+  assert.strictEqual(shift([2, 1, 26, 31, 12], [35, 7, 9, 26, 31]), null);
+  assert.strictEqual(shift([3, 3, 11, 23, 29], [3, 3, 11, 23, 29]), 0);
+  assert.strictEqual(shift([3, 11, 23, 29, 33], [3, 3, 11, 23, 29]), 1);
+  const tr = new Tracker([2, 1, 26, 31, 12]); tr.feed([35, 2, 1, 26, 12]); const r = tr.feed([35, 2, 1, 26, 12]);
+  assert.deepStrictEqual(r.fresh, [35]);
+});

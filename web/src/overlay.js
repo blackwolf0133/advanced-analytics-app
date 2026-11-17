@@ -1,7 +1,8 @@
 // Yuzen pencere: bolge secimi, ekrandan sayi okuma, takip ve tahmin gosterimi. Oyunun ustunde durur.
 import * as R from './roulette.js';
 import { fromRGBA } from './digits.js';
-import { cellRects, newestRects, readRects, alignStrip } from './geom.js';
+import { cellRects, newestRects, readRects, alignStrip, fitStrip } from './geom.js';
+import { sub } from './digits.js';
 import { Tracker, TRACK } from './tracker.js';
 import { loadRoulette, activeSession, withActive, read, write } from './store.js';
 import { $, ball, Native } from './ui.js';
@@ -29,14 +30,30 @@ function readNewest(c, limit, grab) {
   return vals;
 }
 
-/** Tek sira: seridi verilen yukseklik cevresinde dikeyde arar. Donus: { t, h } ya da null / 'black'. */
+/**
+ * Tek sira: seridi verilen yukseklik cevresinde bulur; hem dikey yeri hem kutu duzeni (kenar boslugu, kac sayi sigdigi,
+ * ilk kutunun genisligi) goruntuden olculur. Donus: { l, w, cols, first, t, h } ya da null / 'black'.
+ */
 function findStrip(c, sw, sh, grab) {
   const k = sw / 1080, pad = Math.round(70 * k), mid = c.t + c.h / 2, y0 = Math.max(0, Math.round(mid - pad)), y1 = Math.min(sh, Math.round(mid + pad));
-  const band = decode(grab(c.l, y0, c.w, y1 - y0)); if (!band) return null;
+  const band = decode(grab(0, y0, sw, y1 - y0)); if (!band) return null;
   let mx = 0; for (let i = 0; i < band.d.length; i += 97) if (band.d[i] > mx) mx = band.d[i];
   if (mx < 12) return 'black';
-  const a = alignStrip(band, y0, { ...c, l: 0 }, k);
-  return a && a.score >= 2.5 ? a : null;
+  const okRead = (cc) => { const b = newestRects(cc, cc.cols), v = readRects(sub(band, cc.l + b.x0, cc.t - y0 + b.y0, cc.l + b.x1, cc.t - y0 + b.y1), b); return { v, n: v.filter((x) => x !== null).length }; };
+  const tries = [];
+  if (c.newest === 'first') {
+    // 1) kaba dikey yer (tam genislik, varsayilan duzen)  2) bu satirlarda yatay olcu  3) olcuyle dikeyi yeniden hizala
+    const rough = alignStrip(band, y0, { ...c, l: 0, w: sw, cols: 14, first: 1.6 }, k) || { t: Math.round(mid - 25 * k), h: Math.round(50 * k) };
+    for (const tt of [rough.t, Math.round(mid - rough.h / 2)]) {
+      const fit = fitStrip(sub(band, 0, tt - y0, sw, tt - y0 + rough.h)); if (!fit) continue;
+      const cc = { ...c, l: fit.l, w: fit.w, cols: fit.cols, first: fit.first }, a = alignStrip(band, y0, cc, k);
+      if (a) tries.push({ ...cc, t: a.t, h: a.h });
+    }
+  }
+  const a = alignStrip(band, y0, c, k); if (a && a.score >= 2.5) tries.push({ ...c, t: a.t, h: a.h });
+  let best = null;
+  for (const cc of tries) { const r = okRead(cc); if (r.v[0] === null) continue; const sc = r.n / cc.cols + r.n * 0.001; if (!best || sc > best.sc) best = { ...cc, sc }; }
+  return best && best.sc >= 0.6 ? { l: best.l, w: best.w, cols: best.cols, first: best.first, t: best.t, h: best.h } : null;
 }
 /** Kucuk pencerede okunan seridin canli goruntusu: kutu yanlis yerdeyse hemen gorulur. */
 function peek() {
@@ -52,8 +69,8 @@ function refit(c) {
   if (c.rows !== 1 || Date.now() - st.fixAt < 4000) return false;
   st.fixAt = Date.now();
   const a = findStrip(c, c.sw, c.sh, (l, t, w, h) => Native.grabRaw(l, t, w, h));
-  if (!a || a === 'black' || (a.t === c.t && a.h === c.h)) return false;
-  st.cfg = { ...c, t: a.t, h: a.h }; write('screen', st.cfg); st.tracker = null; st.first = null; st.bad = 0;
+  if (!a || a === 'black' || ['l', 'w', 'cols', 'first', 't', 'h'].every((x) => a[x] === c[x])) return false;
+  st.cfg = { ...c, ...a }; write('screen', st.cfg); st.tracker = null; st.first = null; st.bad = 0;
   say('Şerit kaymış; yeri yeniden bulundu. Okuma sürüyor.'); return true;
 }
 
@@ -104,8 +121,8 @@ function tick() {
     if (vals === 'black') { say(BLACK); return; }
     if (!vals) { say('Ekran görüntüsü alınamadı.'); return; }
     const r = st.tracker.feed(vals); peek();
-    st.bad = r.state === 'unreadable' || vals[0] === null ? st.bad + 1 : 0;
-    if (st.bad >= 5 && refit(c)) return;
+    st.bad = r.state === 'unreadable' || r.state === 'mismatch' || vals[0] === null ? st.bad + 1 : 0;
+    if (st.bad >= 6 && refit(c)) return;
     if (r.fresh.length) {
       withActive((x) => { for (const v of r.fresh) R.addSpin(x, v); });
       st.saved += r.fresh.length; say(`Yeni sayı: ${r.fresh.join(', ')} · toplam ${st.saved} yeni sayı`); render();
@@ -137,7 +154,7 @@ function shoot() {
 }
 function draw() {
   const p = st.pick, cv = $('#cv'), g = cv.getContext('2d'), dpr = window.devicePixelRatio || 1;
-  $('#rows').textContent = p.rows; $('#cols').textContent = p.cols; $('#first').textContent = p.first.toFixed(1).replace('.', ','); $('#firstbox').style.display = p.rows === 1 ? '' : 'none';
+  $('#rows').textContent = p.rows; $('#cols').textContent = p.cols; $('#first').textContent = p.first.toFixed(2).replace('.', ','); $('#firstbox').style.display = p.rows === 1 ? '' : 'none';
   $('#newest').textContent = 'En yeni: ' + (p.rows === 1 ? (p.newest === 'first' ? 'solda' : 'sağda') : (p.newest === 'first' ? 'sol üst' : 'sağ alt'));
   $('#preset').textContent = p.rows === 1 ? 'Tablo' : 'Tek sıra';
   g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
@@ -185,8 +202,8 @@ function autoStrip(y) {
   setTimeout(() => {
     const a = findStrip({ ...base, rows: 1, cols: p.cols, first: p.first, newest: p.newest }, p.iw, p.ih, (l, t, w, hh) => Native.grabFrozen(l, t, w, hh));
     if (a === 'black') { p.rect = base; p.results = null; draw(); $('#hint').textContent = BLACK; return; }
-    p.rect = a ? { ...base, t: a.t, h: a.h } : base;
-    if (a) test(); else { p.results = null; draw(); $('#hint').textContent = 'Burada sayı şeridi bulunamadı. Tam sayıların üstüne dokunun; olmazsa ▲ ▼ ile sarı kutuyu sayıların üstüne getirip “Dene”ye dokunun.'; }
+    if (a) { p.rect = { l: a.l, w: a.w, t: a.t, h: a.h }; p.cols = a.cols; p.first = a.first; test(); } else p.rect = base;
+    if (a) return; else { p.results = null; draw(); $('#hint').textContent = 'Burada sayı şeridi bulunamadı. Tam sayıların üstüne dokunun; olmazsa ▲ ▼ ile sarı kutuyu sayıların üstüne getirip “Dene”ye dokunun.'; }
   }, 30);
 }
 function bindPicker() {
@@ -200,13 +217,13 @@ function bindPicker() {
     p.rect = { l: Math.round(Math.min(a.x, b.x)), t: Math.round(Math.min(a.y, b.y)), w: Math.round(Math.abs(a.x - b.x)), h: Math.round(Math.abs(a.y - b.y)) }; p.results = null; draw();
   });
   cv.addEventListener('pointerup', () => { const p = st.pick, at = a; a = null; if (!at || !p) return;
-    if (!moved) { if (p.rows === 1) autoStrip(at.y); return; }
+    if (!moved) { if (p.rows !== 1) { p.rows = 1; p.cols = 14; p.first = 1.6; } autoStrip(at.y); return; }   // tek dokunus her zaman serit arar
     if (p.rect && (p.rect.w < 12 || p.rect.h < 8)) { p.rect = keep; draw(); } });
   $('#bar').addEventListener('click', (e) => {
     const b = e.target.closest('[data-a]'); if (!b) return; const p = st.pick, act = b.dataset.a;
     if (act === 'r-' || act === 'r+') p.rows = Math.max(1, Math.min(14, p.rows + (act === 'r+' ? 1 : -1)));
     else if (act === 'c-' || act === 'c+') p.cols = Math.max(1, Math.min(14, p.cols + (act === 'c+' ? 1 : -1)));
-    else if (act === 'f-' || act === 'f+') p.first = Math.round(Math.max(1, Math.min(3, p.first + (act === 'f+' ? 0.1 : -0.1))) * 10) / 10;
+    else if (act === 'f-' || act === 'f+') p.first = Math.round(Math.max(1, Math.min(3, p.first + (act === 'f+' ? 0.05 : -0.05))) * 100) / 100;
     else if (act === 'preset') { if (p.rows === 1) { p.rows = 9; p.cols = 10; p.first = 1; } else { p.rows = 1; p.cols = 14; p.first = 1.6; } }
     else if (act === 'up' || act === 'down' || act === 'thin' || act === 'thick') { if (!p.rect) return; const k = Math.max(1, Math.round(p.iw / 540)), r = p.rect;
       if (act === 'up') r.t = Math.max(0, r.t - k); else if (act === 'down') r.t = Math.min(p.ih - r.h, r.t + k); else if (act === 'thin') { if (r.h > 12) { r.h -= 2 * k; r.t += k; } } else { r.h += 2 * k; r.t = Math.max(0, r.t - k); } }

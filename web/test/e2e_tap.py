@@ -19,7 +19,7 @@ try:
             hint = ov.inner_text("#hint"); print(f"dokunma y={y}:", hint[:40]); assert hint.startswith("14 hücreden 14"), hint
         ov.screenshot(path="/tmp/tap_picker.png")
         ov.click('[data-a="down"]'); ov.click('[data-a="thick"]'); ov.click('[data-a="align"]'); ov.wait_for_function("document.querySelector('#hint').textContent.includes('hücreden')", timeout=20000)
-        ov.click('[data-a="save"]'); cfg = json.loads(ov.evaluate("localStorage.getItem('aad.screen')")); print("kayit:", cfg); assert cfg["rows"] == 1 and cfg["l"] == 0 and cfg["w"] == 1068, cfg
+        ov.click('[data-a="save"]'); cfg = json.loads(ov.evaluate("localStorage.getItem('aad.screen')")); print("kayit:", cfg); assert cfg["rows"] == 1 and cfg["cols"] == 14 and cfg["l"] + cfg["w"] <= 1068, cfg
         ov.click("#run"); ov.wait_for_function("document.querySelector('#status').textContent.includes('aktarıldı')", timeout=30000); print("durum:", ov.inner_text("#status"))
         sp = [x["v"] for x in json.loads(ov.evaluate("localStorage.getItem('aad.roulette')"))["sessions"][0]["spins"]]; assert sp == WANT[::-1], sp
         assert ov.evaluate("getComputedStyle(document.querySelector('#peek')).display") != "none"; ov.screenshot(path="/tmp/tap_mini.png")
