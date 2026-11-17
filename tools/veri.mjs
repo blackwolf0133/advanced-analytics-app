@@ -148,6 +148,47 @@ async function euroLeague(l) {
   return finish(l, seasons, upcoming);
 }
 
+/* ---------------- FIBA kupalari (Sampiyonlar Ligi, FIBA Europe Cup) ---------------- */
+// Resmi FIBA veri API'si uyelik istiyor; ayni mac listesi herkese acik takvim sayfalarinin icindeki veride duruyor (Next.js).
+const FIBA_LEAGUES = [
+  { id: 'bcl', name: 'FIBA Şampiyonlar Ligi (BCL)', country: 'Avrupa', neutralRounds: ['SF', '3PG', 'F'], pages: {
+    2024: 'https://www.fiba.basketball/en/history/112-fiba-mens-european-club-competitions-tier-1/208850/games',
+    2025: 'https://www.fiba.basketball/en/history/112-fiba-mens-european-club-competitions-tier-1/208962/games',
+    2026: 'https://www.championsleague.basketball/en/games' } },
+  { id: 'fec', name: 'FIBA Europe Cup', country: 'Avrupa', neutralRounds: [], pages: {
+    2024: 'https://www.fiba.basketball/en/events/fiba-europe-cup-24-25/games',
+    2025: 'https://www.fiba.basketball/en/events/fiba-europe-cup-25-26/games',
+    2026: 'https://www.fiba.basketball/en/events/fiba-europe-cup-26-27/games' } },
+];
+export function fibaGames(html) {
+  let text = ''; for (const m of html.matchAll(/self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)/gs)) { try { text += JSON.parse('"' + m[1] + '"'); } catch {} }
+  if (!text) text = html.replace(/\\"/g, '"');
+  const seen = new Map(), re = /\{"gameId":/g; let m;
+  while ((m = re.exec(text))) {
+    let depth = 0, i = m.index, inS = false, esc = false;
+    for (; i < text.length; i++) { const ch = text[i]; if (inS) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inS = false; continue; } if (ch === '"') inS = true; else if (ch === '{') depth++; else if (ch === '}') { depth--; if (!depth) break; } }
+    try { const o = JSON.parse(text.slice(m.index, i + 1)); if (o.teamA && o.teamB && !seen.has(o.gameId)) seen.set(o.gameId, o); } catch {}
+  }
+  return [...seen.values()];
+}
+async function fibaLeague(l) {
+  const prev = readJson(`b/${l.id}.json`, null), seasons = { ...(prev?.seasons || {}) }, upcoming = [], cur = Math.max(...Object.keys(l.pages).map(Number));
+  for (const [y, url] of Object.entries(l.pages)) {
+    if (Number(y) < cur && (seasons[y] || []).length > 100) continue;            // biten sezon bir kez alinir
+    const html = await get(url, { json: false }); if (!html) continue;
+    const list = [];
+    for (const g of fibaGames(html)) {
+      const h = g.teamA.shortName || g.teamA.officialName, a = g.teamB.shortName || g.teamB.officialName, utc = g.gameDateTimeUTC || g.gameDateTime;
+      if (!h || !a || !utc || g.statusCode && g.statusCode !== 'VALID') continue;
+      const neutral = l.neutralRounds.includes(String(g.round?.roundCode || '').toUpperCase()) ? 1 : 0, hs = Number(g.teamAScore), as = Number(g.teamBScore);
+      if (!g.isLive && hs + as > 0) list.push([String(utc).slice(0, 10), h, a, hs, as, Number(y), neutral]);
+      else if (!g.isPostponed && !g.isLive) upcoming.push([new Date(String(utc).replace(/Z?$/, 'Z')).toISOString(), h, a, neutral]);
+    }
+    if (list.length || !seasons[y]) seasons[y] = list;
+  }
+  return finish(l, seasons, upcoming);
+}
+
 /* ---------------- Turkiye (TBF) ---------------- */
 const TBF = 'https://miniappapi.tbf.org.tr/webapi-service/api/';
 const TBF_LEAGUES = [
@@ -216,6 +257,7 @@ async function intl() {
 const index = { updated: NOW.toISOString(), basket: [], milli: null };
 for (const l of ESPN_LEAGUES) { try { const r = await espnLeague(l); if (r) index.basket.push(r); } catch (e) { console.warn(l.id, e); } }
 for (const l of EL_LEAGUES) { try { const r = await euroLeague(l); if (r) index.basket.push(r); } catch (e) { console.warn(l.id, e); } }
+for (const l of FIBA_LEAGUES) { try { const r = await fibaLeague(l); if (r) index.basket.push(r); } catch (e) { console.warn(l.id, e); } }
 const feat = await get(`${TBF}League/get-featured-9-leagues`);
 for (const l of TBF_LEAGUES) { try { const r = await tbfLeague(l, feat?.data || []); if (r) index.basket.push(r); } catch (e) { console.warn(l.id, e); } }
 try { index.milli = await intl(); } catch (e) { console.warn('milli', e); }

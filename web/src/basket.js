@@ -6,7 +6,7 @@ import * as R from './rating.js';
 
 export const VERI = ['https://raw.githubusercontent.com/blackwolf0133/advanced-analytics-app/veri/', 'https://cdn.jsdelivr.net/gh/blackwolf0133/advanced-analytics-app@veri/'];
 export const seasonLabel = (y, cross = true) => (cross ? `${y}-${String((y + 1) % 100).padStart(2, '0')}` : String(y));
-export const FALLBACK_LEAGUES = [['nba', 'NBA', 'ABD'], ['euroleague', 'EuroLeague', 'Avrupa'], ['bsl', 'Basketbol Süper Ligi', 'Türkiye']];
+export const FALLBACK_LEAGUES = [['bsl', 'Basketbol Süper Ligi', 'Türkiye'], ['euroleague', 'EuroLeague', 'Avrupa'], ['eurocup', 'EuroCup', 'Avrupa'], ['bcl', 'FIBA Şampiyonlar Ligi (BCL)', 'Avrupa'], ['fec', 'FIBA Europe Cup', 'Avrupa'], ['nba', 'NBA', 'ABD']];
 export const wilson = (k, n, z = 1.96) => { if (!n) return [0, 1]; const p = k / n, d = 1 + z * z / n, c = (p + z * z / (2 * n)) / d, m = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d; return [Math.max(0, c - m), Math.min(1, c + m)]; };
 
 async function first(get, path) { let err; for (const b of VERI) { try { return JSON.parse(await get(b + path)); } catch (e) { err = e; } } throw err; }
@@ -19,6 +19,23 @@ export async function download(get, id) {
   const f = await first(get, `b/${id}.json`); if (!f.seasons) throw new Error('dosya beklenen biçimde değil');
   write('bb_' + id, { ...f, fetched: Date.now() });
   return { n: Object.values(f.seasons).reduce((s, l) => s + l.length, 0), seasons: Object.keys(f.seasons).map(Number), updated: f.updated };
+}
+/** Butun ligler: once lig listesi, sonra her ligin dosyasi (toplam ~1,5 MB). Bir lig alinamazsa digerleri yine iner. */
+export async function downloadAll(get, onStep = () => {}) {
+  const idx = await first(get, 'index.json'); write('bb_index', { ...idx, fetched: Date.now() });
+  const ok = [], bad = [];
+  for (const l of idx.basket) {
+    onStep(l);
+    try { const f = await first(get, `b/${l.id}.json`); if (!f.seasons) throw new Error('biçim'); write('bb_' + l.id, { ...f, fetched: Date.now() }); ok.push(l.id); }
+    catch (e) { bad.push(`${l.name}: ${e.message}`); }
+  }
+  return { ok, bad };
+}
+/** Hizli model (yalnizca bugunku guc puanlari; gecmis test yok): butun liglerin yaklasan maclari icin. */
+export function buildLite(db) {
+  const games = allGames(db); if (!games.length) return null;
+  const P = R.prepare(games), o = { ...R.DEFAULTS, ...(db.params?.o || {}) }, s = R.fit(P, P.n, o);
+  return { P, o, s, sigma: db.params?.sigma || 12, lastSeason: games[games.length - 1][5], n: P.n, lite: true };
 }
 export const allGames = (db) => Object.keys(db.seasons).map(Number).sort((a, b) => a - b).flatMap((y) => db.seasons[y]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
 

@@ -42,3 +42,5 @@ table.t { width: 100%; border-collapse: collapse; font-size: 13px; } table.t th 
 .res { display: flex; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); font-size: 13.5px; } .res:first-of-type { border-top: 0; }
 .mark { flex: none; width: 30px; height: 30px; border-radius: 15px; display: grid; place-items: center; font-weight: 700; font-size: 17px; }
 .ok { color: #58e08f; } .no { color: #ff6b5f; } .mark.ok { background: #153b29; } .mark.no { background: #45201d; }
+
+.lgtag { display: block; margin: 0 0 4px; font-size: 11.5px; font-weight: 600; letter-spacing: .02em; color: var(--accent, #4ea1ff); text-transform: uppercase; }
