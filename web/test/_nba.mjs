@@ -1,0 +1,10 @@
+import fs from 'fs';
+import { parseSchedule, build, predict } from '../src/basket.js';
+const s = parseSchedule(fs.readFileSync('/tmp/probe/probe-out/nba_cdn_schedule.json', 'utf8'));
+console.log('sezon', s.season, 'oynanan', s.games.length, 'gelecek', s.upcoming.length);
+const hw = s.games.filter((g) => g[3] > g[4]).length; console.log('ev galibiyet orani', (hw / s.games.length).toFixed(3));
+const m = build(s.games.map((g) => [...g.slice(0, 5), s.season]));
+const up = s.upcoming.slice(0, 40).map((u) => predict(m, u[1] ?? u.home, u[2] ?? u.away));
+console.log('ornek upcoming', JSON.stringify(s.upcoming[0]));
+console.log('sonraki 40 macta ev favori:', up.filter((p) => p.pHome >= 0.5).length, '/', up.length);
+const last = m.log.slice(-150); console.log('son 150 macta modelin ev secimi:', last.filter((r) => r.p >= 0.5).length, 'isabet', last.filter((r) => (r.p >= 0.5) === (r.hw === 1)).length);
