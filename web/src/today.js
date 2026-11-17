@@ -25,7 +25,12 @@ export function verdict(m) {
 export function htVerdict(m) {
   if (!m.pr || !m.r1) return null; const y = m.r1[0] > m.r1[1] ? 0 : m.r1[0] === m.r1[1] ? 1 : 2; return pick(m.pr.ht) === y;
 }
-export const scoreHit = (m) => !!(m.pr && m.r && m.st === 'post' && m.pr.sc[0][0] === m.r[0] && m.pr.sc[0][1] === m.r[1]);
+/** Ekranda gosterilen skor tahmini: tahmin edilen sonuca uygun en olasi skor (ornek: ev sahibi favoriyse 1-0 gibi). */
+const oc = (s) => (s[0] > s[1] ? 0 : s[0] === s[1] ? 1 : 2);
+export const ftScore = (p) => { const k = pick(p.p); return (p.scb && p.scb[k]) || p.sc.find((s) => oc(s) === k) || p.sc[0]; };
+export const htScore = (p) => { const k = pick(p.ht); return (p.hscb && p.hscb[k]) || p.hsc.find((s) => oc(s) === k) || p.hsc[0]; };
+export const scoreHit = (m) => { if (!m.pr || !m.r || m.st !== 'post') return null; const s = ftScore(m.pr); return s[0] === m.r[0] && s[1] === m.r[1]; };
+export const htScoreHit = (m) => { if (!m.pr || !m.r1) return null; const s = htScore(m.pr); return s[0] === m.r1[0] && s[1] === m.r1[1]; };
 
 /** Canli skor: secili liglerin bugunku maclari icin ESPN skor tablolari; maclar kimlikle guncellenir. */
 export async function refreshLive(get, data, slugs) {

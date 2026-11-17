@@ -30,6 +30,8 @@ public class MainActivity extends Activity {
     private static final int REQ_NOTIFY = 42;
     /** Uygulamanin veri indirebilecegi adresler. Baska hicbir yere baglanilmaz. */
     private static final List<String> HOSTS = Arrays.asList("www.football-data.co.uk", "raw.githubusercontent.com", "cdn.jsdelivr.net", "site.api.espn.com", "cdn.espn.com");
+    /** Yapay zeka servisleri: yalnizca bunlara soru (POST) gonderilebilir. Anahtarlar telefonda kalir, baska yere gitmez. */
+    private static final List<String> AI_HOSTS = Arrays.asList("oai.endpoints.kepler.ai.cloud.ovh.net", "api.kilo.ai", "api.groq.com", "generativelanguage.googleapis.com", "openrouter.ai");
     private static final int MAX_BODY = 12 * 1024 * 1024;
     private WebView web;
 
@@ -88,21 +90,34 @@ public class MainActivity extends Activity {
     }
 
     /** Izinli bir adresten metin indirir; sonucu AAD.onHttp(id, durum, govde) ile arayuze bildirir. Arka planda calisir. */
-    private void fetch(String id, String address, String headersJson) {
+    private void fetch(String id, String address, String headersJson) { fetch(id, address, headersJson, null); }
+
+    private void fetch(String id, String address, String headersJson, String payload) {
         int status = 0;
         String body;
         HttpURLConnection con = null;
         try {
             URL url = new URL(address);
-            if (!"https".equals(url.getProtocol()) || !HOSTS.contains(url.getHost())) throw new SecurityException("bu adrese izin verilmiyor");
+            boolean post = payload != null;
+            if (!"https".equals(url.getProtocol()) || !(post ? AI_HOSTS : HOSTS).contains(url.getHost())) throw new SecurityException("bu adrese izin verilmiyor");
             con = (HttpURLConnection) url.openConnection();
             con.setConnectTimeout(20000);
-            con.setReadTimeout(45000);
+            con.setReadTimeout(post ? 120000 : 45000);
             con.setInstanceFollowRedirects(false);
             JSONObject headers = new JSONObject(headersJson == null || headersJson.isEmpty() ? "{}" : headersJson);
             for (Iterator<String> it = headers.keys(); it.hasNext(); ) {
                 String k = it.next();
                 con.setRequestProperty(k, headers.getString(k));
+            }
+            if (post) {
+                byte[] data = payload.getBytes(StandardCharsets.UTF_8);
+                con.setRequestMethod("POST");
+                con.setDoOutput(true);
+                con.setFixedLengthStreamingMode(data.length);
+                if (con.getRequestProperty("Content-Type") == null) con.setRequestProperty("Content-Type", "application/json");
+                java.io.OutputStream os = con.getOutputStream();
+                os.write(data);
+                os.close();
             }
             status = con.getResponseCode();
             InputStream in = status >= 400 ? con.getErrorStream() : con.getInputStream();
@@ -117,7 +132,7 @@ public class MainActivity extends Activity {
                 in.close();
             }
             body = new String(out.toByteArray(), StandardCharsets.UTF_8);
-            if (status != 200) body = body.length() > 200 ? body.substring(0, 200) : body;
+            if (status != 200) body = body.length() > 400 ? body.substring(0, 400) : body;
         } catch (Exception e) {
             status = 0;
             body = "bağlantı kurulamadı (" + e.getClass().getSimpleName() + ")";
@@ -143,6 +158,11 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void httpGet(String id, String url, String headersJson) {
             new Thread(() -> fetch(id, url, headersJson), "aad-http").start();
+        }
+
+        @JavascriptInterface
+        public void httpPost(String id, String url, String headersJson, String payload) {
+            new Thread(() -> fetch(id, url, headersJson, payload == null ? "" : payload), "aad-http").start();
         }
 
         @JavascriptInterface

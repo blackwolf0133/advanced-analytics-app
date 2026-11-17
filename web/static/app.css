@@ -56,4 +56,11 @@ table.t { width: 100%; border-collapse: collapse; font-size: 13px; } table.t th 
 .lb.win .lmin { color: #58e08f; font-weight: 700; } .lb.lose .lmin { color: #ff8a80; font-weight: 700; font-size: 14px; }
 .dot { display: inline-block; width: 7px; height: 7px; border-radius: 4px; background: #ff4d4d; margin-right: 5px; vertical-align: 1px; animation: blink 1.2s infinite; }
 @keyframes blink { 50% { opacity: .25; } }
-.pred { margin: 6px 0 0; font-size: 13.5px; } .pred b { font-family: var(--mono); }
+.fpred { margin: 8px 0 0; font-size: 13px; line-height: 1.55; } .fpred b { font-family: var(--mono); }
+
+.sline { display: flex; align-items: baseline; gap: 10px; margin: 8px 0 0; padding: 8px 10px; background: #111821; border: 1px solid var(--line); border-radius: 10px; font-size: 14px; }
+.sline span { flex: 1; color: var(--muted); } .sline b { font: 700 18px var(--mono); } .sline em { font-style: normal; font-weight: 700; font-size: 13px; }
+.aibtn { width: 100%; margin-top: 10px; min-height: 40px; background: #1d2633; border-color: #34465c; color: #cfe0ff; font-weight: 600; }
+.aiout:empty { display: none; } .aiout { margin-top: 8px; }
+.aicard { border: 1px solid #34465c; border-radius: 12px; padding: 10px; background: #121a25; } .aicard h3 { margin: 0 0 6px; font-size: 14px; color: #cfe0ff; }
+.aiag { border-top: 1px solid var(--line); padding: 8px 0 0; margin-top: 8px; font-size: 13px; } .aiag b { color: var(--text); } .aiag .muted { font-size: 12.5px; }

@@ -3,6 +3,7 @@ import * as T from './today.js';
 import { read, write } from './store.js';
 import { $, esc, pct, num } from './ui.js';
 import { httpGet } from './net.js';
+import * as AI from './aiui.js';
 
 const st = { day: 0, sort: read('fg_sort', 'time'), min: 0, open: false, busy: false, timer: null, toast: null, polling: false, lastErr: 0 };
 const DAYS = [[-1, 'Dün'], [0, 'Bugün'], [1, 'Yarın'], [2, 'Sonraki gün']];
@@ -10,6 +11,8 @@ const hm = (t) => new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul'
 const when = (t) => new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date(t));
 const L = ['1', 'X', '2'];
 const outcome = (sc) => (sc[0] > sc[1] ? 0 : sc[0] === sc[1] ? 1 : 2);
+/** Skor satirinin sonu: tuttu / tutmadi (gercek skorla) ya da bos. */
+const mark = (hit, real) => (hit == null || !real ? '' : hit ? '<em class="ok">✓ tuttu 🎯</em>' : `<em class="no">✗ (${real[0]}-${real[1]})</em>`);
 
 function selection(data, dayLeagues) {
   const saved = read('fg_sel', null); if (saved) return new Set(saved);
@@ -46,7 +49,7 @@ export function viewToday(toast, host) {
     ${st.open ? chooser(data, counts, sel) : `<p class="muted" style="margin:0">${dayLeagues.length ? [...sel].filter((l) => counts.has(l)).map((l) => esc(lgName(data, l))).slice(0, 8).join(', ') + ([...sel].filter((l) => counts.has(l)).length > 8 ? '…' : '') || 'Hiç lig seçili değil.' : 'Bu gün için maç yok.'} <span class="link">Değiştirmek için dokunun.</span></p>`}</div>
   <div class="card"><div class="row" id="fg-sort" style="margin-bottom:8px">${[['time', 'Saate göre'], ['league', 'Lige göre'], ['conf', 'Güvene göre']].map(([k, v]) => `<button data-s="${k}" class="grow ${st.sort === k ? 'primary' : ''}" style="min-height:36px;padding:4px;font-size:12.5px">${v}</button>`).join('')}</div>
     <div class="row" id="fg-min">${[[0, 'Hepsi'], [0.5, '%50+'], [0.6, '%60+'], [0.7, '%70+']].map(([v, l]) => `<button data-m="${v}" class="grow ${st.min === v ? 'primary' : ''}" style="min-height:36px;padding:4px;font-size:12.5px">${l}</button>`).join('')}</div>
-    <p class="muted" style="margin:8px 0 0">${shown.length} maç${fin.length ? ` · biten ${fin.length} maçın <b class="ok">${wins}</b> tanesinde tahmin tuttu${scs ? `, ${scs} tanesinde skor da tuttu 🎯` : ''}` : ''}</p></div>
+    <p class="muted" style="margin:8px 0 0">${shown.length} maç${fin.length ? ` · biten ${fin.length} maçın <b class="ok">${wins}</b> tanesinde sonuç tahmini tuttu${scs ? `, ${scs} tanesinde skor tahmini de tuttu 🎯` : ''}` : ''}</p></div>
   ${ka && ka.n >= 30 ? `<div class="card"><h2>Model karnesi <span class="tag">${ka.n} maç</span></h2><p class="muted" style="margin:0 0 8px">Son 3 hafta: model her hafta yalnızca o haftadan önceki maçlarla kuruldu ve sonraki 7 günü tahmin etti.</p>
     <div class="tiles"><div class="tile gold"><span>Maç sonucu (1X2)</span><b>${pct(ka.hit, 0)}</b></div><div class="tile"><span>Tam skor</span><b>${pct(ka.sc, 0)}</b></div><div class="tile"><span>İlk yarı sonucu</span><b>${ka.ht == null ? '—' : pct(ka.ht, 0)}</b></div></div>
     ${selKarne(data, kt, sel)}${kv && kv.n >= 20 ? `<p class="muted" style="margin:8px 0 0">Uygulamanın maçtan önce kaydettiği ${kv.n} tahminin %${Math.round(kv.hit * 100)}’i tuttu (skor %${Math.round(kv.sc * 100)}).</p>` : ''}
@@ -56,6 +59,12 @@ export function viewToday(toast, host) {
   $('#fg-lgh').onclick = () => { st.open = !st.open; viewToday(null, host); };
   $('#fg-sort').onclick = (e) => { const b = e.target.closest('[data-s]'); if (b) { st.sort = b.dataset.s; write('fg_sort', st.sort); viewToday(null, host); } };
   $('#fg-min').onclick = (e) => { const b = e.target.closest('[data-m]'); if (b) { st.min = Number(b.dataset.m); viewToday(null, host); } };
+  $('#fg-list').onclick = (e) => {
+    const b = e.target.closest('[data-ai],[data-ai-re]'); if (!b) return;
+    const id = b.dataset.ai || b.dataset.aiRe, m = data.matches.find((x) => x.id === id); if (!m) return;
+    if (b.dataset.aiRe) write('ai_' + id, null);
+    const fresh = T.load()?.matches.find((x) => x.id === id) || m; aiStart(fresh, data, host);
+  };
   const ch = $('#fg-ch');
   if (ch) ch.onclick = (e) => {
     const b = e.target.closest('[data-a]'), c = e.target.closest('input[data-l]');
@@ -68,6 +77,14 @@ export function viewToday(toast, host) {
   if (st.day <= 0 && shown.some((m) => m.st !== 'post' || Date.now() - Date.parse(m.t) < 3 * 3600e3)) start(host, sel); else stop();
 }
 const lgName = (data, l) => data.leagues[l]?.name || l;
+function aiCached(m) { const pr = AI.progress(m.id); if (pr) return `<div class="aicard"><p class="muted" style="margin:0">⏳ ${esc(pr)}</p></div>`; const r = AI.cached(m.id); return r && r.cons ? AI.render(m, r) : ''; }
+async function aiStart(m, data, host) {
+  const box = () => document.getElementById('ai-' + m.id), show = (t) => { const b = box(); if (b) b.innerHTML = `<div class="aicard"><p class="muted" style="margin:0">⏳ ${esc(t)}</p></div>`; };
+  if (AI.progress(m.id)) return;
+  show('Başlıyor…');
+  try { const res = await AI.run(m, lgName(data, m.lg), when(m.t), show); const b = box(); if (b) b.innerHTML = AI.render(m, res); }
+  catch (e) { const b = box(); if (b) b.innerHTML = `<div class="aicard"><p class="no" style="margin:0">${esc(e.message)}</p></div>`; }
+}
 function selKarne(data, kt, sel) {
   const rows = [...sel].map((l) => [l, kt[l]]).filter(([, k]) => k && k.n >= 20).sort((a, b) => b[1].n - a[1].n).slice(0, 8);
   return rows.length ? `<table class="t" style="margin-top:8px"><thead><tr><th>Seçili lig</th><th>Maç</th><th>1X2</th><th>Skor</th><th>İY</th></tr></thead><tbody>${rows.map(([l, k]) => `<tr><td>${esc(lgName(data, l))}</td><td>${k.n}</td><td><b>${pct(k.hit, 0)}</b></td><td>${pct(k.sc, 0)}</td><td>${k.ht == null ? '—' : pct(k.ht, 0)}</td></tr>`).join('')}</tbody></table>` : '';
@@ -85,8 +102,8 @@ function liveBox(m) {
   if (/POSTP|CANCEL|ABANDON/i.test(m.sn || '')) return `<div class="lb">Ertelendi</div>`;
   if (m.st === 'pre' || !m.r) return `<div class="lb"><b>${hm(m.t)}</b></div>`;
   const ht = /HALFTIME|HALF_TIME/i.test(m.sn || ''), score = `<b class="lsc">${m.r[0]} - ${m.r[1]}</b>`;
-  if (m.st === 'in') return `<div class="lb ${v}">${score}<span class="lmin"><i class="dot"></i>${ht ? 'İY' : esc(m.clock || 'canlı')}</span></div>`;
-  return `<div class="lb ${v}">${score}<span class="lmin">${v === 'win' ? '✓ tuttu' : v === 'lose' ? '✗ 😞' : 'MS'}</span></div>`;
+  if (m.st === 'in') return `<div class="lb ${v}">${score}<span class="lmin"><i class="dot"></i>${ht ? 'Devre arası' : esc(m.clock || 'canlı')}</span></div>`;
+  return `<div class="lb ${v}">${score}<span class="lmin">${v === 'win' ? 'Sonuç ✓' : v === 'lose' ? 'Sonuç ✗ 😞' : 'Bitti'}</span></div>`;
 }
 function list(data, ms) {
   if (!ms.length) return `<div class="card"><p class="muted">Seçili liglerde bu gün maç yok. “Ligler” kutusundan lig ekleyin ya da başka bir gün seçin.</p></div>`;
@@ -94,11 +111,11 @@ function list(data, ms) {
     const p = m.pr, pk = p ? T.pick(p.p) : -1, hv = T.htVerdict(m);
     return `<div class="card fm" data-id="${m.id}"><p class="lgtag">${esc(lgName(data, m.lg))}${m.n ? ' · tarafsız saha' : ''}</p>
       <div class="fmrow"><div class="grow fmt"><b>${esc(m.h)}</b><b>${esc(m.a)}</b></div>${liveBox(m)}</div>
-      ${p ? `<div class="tiles" style="margin-top:8px">${p.p.map((x, i) => `<div class="tile ${i === pk ? 'gold' : ''}"><span>${L[i]}</span><b>${pct(x, 0)}</b></div>`).join('')}</div>
-      <p class="pred">Skor tahmini <b>${p.sc[0][0]}-${p.sc[0][1]}</b> <span class="muted">(${pct(p.sc[0][2], 0)})</span> · sonra ${p.sc.slice(1).map((s) => `${s[0]}-${s[1]}`).join(', ')}${T.scoreHit(m) ? ' <b class="ok">🎯 skor tuttu</b>' : ''}${outcome(p.sc[0]) !== pk && p.scb?.[pk] ? `<br><span class="muted">${['Ev sahibi kazanırsa', 'Berabere biterse', 'Deplasman kazanırsa'][pk]} en olası skor:</span> <b>${p.scb[pk][0]}-${p.scb[pk][1]}</b>` : ''}</p>
-      <p class="pred">İlk yarı <b>${p.hsc[0][0]}-${p.hsc[0][1]}</b> · ${p.ht.map((x, i) => `${L[i]} ${pct(x, 0)}`).join(' · ')}${m.r1 ? ` · <span class="${hv ? 'ok' : 'no'}">İY ${m.r1[0]}-${m.r1[1]} ${hv ? '✓' : '✗'}</span>` : ''}</p>
-      <p class="pred">İkinci yarı · ${p.h2.map((x, i) => `${L[i]} ${pct(x, 0)}`).join(' · ')}</p>
-      <p class="pred muted">2,5 üst ${pct(p.o25, 0)} · karşılıklı gol ${pct(p.btts, 0)} · beklenen gol ${num(p.xg[0])}–${num(p.xg[1])}${p.nh < 6 || p.na < 6 ? ' · az veri' : ''}${m.bt ? ' · bu tahmin maçtan sonra eski veriyle hesaplandı' : ''}</p>`
+      ${p ? `<div class="tiles" style="margin-top:8px">${p.p.map((x, i) => `<div class="tile ${i === pk ? 'gold' : ''}"><span>${['1 (ev)', 'X (berabere)', '2 (deplasman)'][i]}</span><b>${pct(x, 0)}</b></div>`).join('')}</div>
+      <div class="sline"><span>İY skor tahmini</span><b>${T.htScore(p)[0]}-${T.htScore(p)[1]}</b>${mark(T.htScoreHit(m), m.r1)}</div>
+      <div class="sline"><span>Maç sonucu skor tahmini</span><b>${T.ftScore(p)[0]}-${T.ftScore(p)[1]}</b>${mark(T.scoreHit(m), m.st === 'post' ? m.r : null)}</div>
+      <p class="fpred muted">İlk yarı sonucu ${p.ht.map((x, i) => `${L[i]} ${pct(x, 0)}`).join(' · ')}${hv == null ? '' : ` <span class="${hv ? 'ok' : 'no'}">${hv ? '✓' : '✗'}</span>`}<br>İkinci yarı sonucu ${p.h2.map((x, i) => `${L[i]} ${pct(x, 0)}`).join(' · ')}<br>2,5 üst ${pct(p.o25, 0)} · karşılıklı gol ${pct(p.btts, 0)} · beklenen gol ${num(p.xg[0])}–${num(p.xg[1])}${p.nh < 6 || p.na < 6 ? ' · az veri' : ''}${m.bt ? '<br>Bu tahmin maçtan sonra, yalnızca o günden önceki verilerle hesaplandı.' : ''}</p>
+      <button class="aibtn" data-ai="${m.id}">🤖 YZ ortak analiz</button><div class="aiout" id="ai-${m.id}">${aiCached(m)}</div>`
       : `<p class="muted" style="margin:8px 0 0">Bu maç için tahmin yok: takımlardan biri için yeterli maç verisi yok (genç ve kadın milli takımlar, alt lig takımları).</p>`}</div>`;
   }).join('');
 }

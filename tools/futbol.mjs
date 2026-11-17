@@ -84,8 +84,17 @@ export async function futbol({ get, pool, readJson, writeJson, NOW, milliGames, 
     const r = rates(model, e.lg, e.hid, e.aid, e.n); if (r.nh < 2 || r.na < 2) return null;     // takimlardan biri icin yeterli mac yok
     return pack(predictMatch(r.l, r.m, model.rho, f), r.nh, r.na);
   };
-  const pack = (p, nh, na) => ({ p: p.p.map(r3), ht: p.ht.map(r3), h2: p.h2.map(r3), sc: p.top.map(([x, y, v]) => [x, y, r3(v)]), hsc: p.htTop.map(([x, y, v]) => [x, y, r3(v)]), scb: p.by.map(([x, y, v]) => [x, y, r3(v)]),
+  const pack = (p, nh, na) => ({ p: p.p.map(r3), ht: p.ht.map(r3), h2: p.h2.map(r3), sc: p.top.map(([x, y, v]) => [x, y, r3(v)]), hsc: p.htTop.map(([x, y, v]) => [x, y, r3(v)]), scb: p.by.map(([x, y, v]) => [x, y, r3(v)]), hscb: p.htBy.map(([x, y, v]) => [x, y, r3(v)]),
     o25: r3(p.o25), btts: r3(p.btts), xg: p.xg.map((x) => Math.round(x * 100) / 100), nh: Math.round(nh), na: Math.round(na) });
+
+  // takim formu (son 6 mac, her yarisma) ve iki takimin aralarindaki son maclar: yapay zeka analizine verilir
+  const byTeam = new Map(), names = new Map();
+  for (const [id, r] of Object.entries(db.ev)) { const m = { id, t: r[2], c: r[1], h: r[3], a: r[4], hg: r[5], ag: r[6] }; names.set(r[3], r[13]); names.set(r[4], r[14]);
+    for (const tm of [r[3], r[4]]) { if (!byTeam.has(tm)) byTeam.set(tm, []); byTeam.get(tm).push(m); } }
+  for (const l of byTeam.values()) l.sort((x, y) => (x.t < y.t ? 1 : -1));
+  const form = (tm, before, n = 6) => (byTeam.get(tm) || []).filter((m) => m.t < before).slice(0, n).map((m) => { const home = m.h === tm, gf = home ? m.hg : m.ag, ga = home ? m.ag : m.hg;
+    return [m.t.slice(5, 10), names.get(home ? m.a : m.h) || '?', home ? 'E' : 'D', gf, ga, m.c]; });
+  const h2h = (a, b, before) => (byTeam.get(a) || []).filter((m) => m.t < before && ((m.h === a && m.a === b) || (m.h === b && m.a === a))).slice(0, 3).map((m) => [m.t.slice(0, 10), names.get(m.h), m.hg, m.ag, names.get(m.a)]);
 
   // 4) gun penceresi: mac oncesi tahmin kaydedilir; baslamis/bitmis maclarda kayitli tahmin kullanilir (yoksa geriye donuk: o gunden onceki veriyle)
   const seen = new Set(), out = [];
@@ -96,14 +105,15 @@ export async function futbol({ get, pool, readJson, writeJson, NOW, milliGames, 
     let pr = preds.p[e.id]?.pr || null, bt = 0;
     if (e.st === 'pre') { pr = predictOne(e, M); if (pr) preds.p[e.id] = { pr, t: e.t, lg: e.lg, made: NOW.toISOString() }; }
     else if (!pr) { pr = predictOne(e, backModel(Math.floor(dayOf(e.t)))); bt = pr ? 1 : 0; if (pr) preds.p[e.id] = { pr, t: e.t, lg: e.lg, made: 'geriye-donuk' }; }
-    out.push({ id: e.id, lg: e.lg, k: e.k, t: e.t, h: e.h, a: e.a, n: e.n, st: e.st, sn: e.sn, clock: e.clock, det: e.det, r: e.sc || null, r1: e.ht || null, pr, bt });
+    out.push({ id: e.id, lg: e.lg, k: e.k, t: e.t, h: e.h, a: e.a, n: e.n, st: e.st, sn: e.sn, clock: e.clock, det: e.det, r: e.sc || null, r1: e.ht || null, pr, bt,
+      fh: form(e.hid, e.t), fa: form(e.aid, e.t), hh: h2h(e.hid, e.aid, e.t) });
   }
   // 5) karne: kaydedilen tahminler + sonuclar (son 60 gun)
   const res60 = new Map(rows.map((m) => [m.id, m])), stat = {}, add = (k, s) => { const o = stat[k] || (stat[k] = { n: 0, hit: 0, sc: 0, nht: 0, ht: 0, ll: 0 }); o.n++; o.hit += s.hit; o.sc += s.sc; o.ll += s.ll; if (s.ht != null) { o.nht++; o.ht += s.ht; } };
   for (const [id, rec] of Object.entries(preds.p)) {
     if (Date.parse(rec.t) < D(-60).getTime()) { delete preds.p[id]; continue; }
     const m = res60.get(id); if (!m || !rec.pr) continue;
-    const y = m.hg > m.ag ? 0 : m.hg === m.ag ? 1 : 2, pick = rec.pr.p.indexOf(Math.max(...rec.pr.p)), top = rec.pr.sc[0];
+    const y = m.hg > m.ag ? 0 : m.hg === m.ag ? 1 : 2, pick = rec.pr.p.indexOf(Math.max(...rec.pr.p)), top = rec.pr.scb?.[pick] || rec.pr.sc[0];   // ekranda gosterilen skor
     const s = { hit: pick === y ? 1 : 0, sc: top[0] === m.hg && top[1] === m.ag ? 1 : 0, ll: -Math.log(Math.max(0.005, rec.pr.p[y])), ht: null };
     if (m.h1 != null) { const yh = m.h1 > m.a1 ? 0 : m.h1 === m.a1 ? 1 : 2; s.ht = rec.pr.ht.indexOf(Math.max(...rec.pr.ht)) === yh ? 1 : 0; }
     add('*', s); add(rec.lg, s);
@@ -119,7 +129,7 @@ export async function futbol({ get, pool, readJson, writeJson, NOW, milliGames, 
       if (m.day < cut || m.day >= cut + 7) continue;
       const r = rates(Mw, m.c, m.h, m.a, m.n); if (r.nh < 4 || r.na < 4) continue;
       const pr = predictMatch(r.l, r.m, Mw.rho, shareW.get(m.c) ?? shareW.get('*')), y = m.hg > m.ag ? 0 : m.hg === m.ag ? 1 : 2, pk = pr.p.indexOf(Math.max(...pr.p));
-      const s = { hit: pk === y ? 1 : 0, sc: pr.top[0][0] === m.hg && pr.top[0][1] === m.ag ? 1 : 0, ll: -Math.log(Math.max(0.005, pr.p[y])), base: -Math.log(fs[y]), ht: null };
+      const sb = pr.by[pk], s = { hit: pk === y ? 1 : 0, sc: sb[0] === m.hg && sb[1] === m.ag ? 1 : 0, ll: -Math.log(Math.max(0.005, pr.p[y])), base: -Math.log(fs[y]), ht: null };
       if (m.h1 != null) { const yh = m.h1 > m.a1 ? 0 : m.h1 === m.a1 ? 1 : 2; s.ht = pr.ht.indexOf(Math.max(...pr.ht)) === yh ? 1 : 0; }
       addT('*', s); addT(m.c, s);
     }

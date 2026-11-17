@@ -6,3 +6,8 @@ export function httpGet(url, headers) {
   if (!Native?.httpGet) return Promise.reject(new Error('indirme yalnızca telefona kurulan uygulamada çalışır'));
   return new Promise((ok, fail) => { const id = 'h' + (++seq); pending.set(id, { ok, fail }); Native.httpGet(id, url, JSON.stringify(headers || {})); setTimeout(() => { if (pending.delete(id)) fail(new Error('zaman aşımı')); }, 70000); });
 }
+/** Yapay zeka servisine soru (POST). Yalnizca telefondaki uygulamada; izinli adresler Java tarafinda denetlenir. */
+export function httpPost(url, headers, body) {
+  if (!Native?.httpPost) return Promise.reject(new Error('yapay zekâ yalnızca telefona kurulan uygulamada çalışır'));
+  return new Promise((ok, fail) => { const id = 'p' + (++seq); pending.set(id, { ok, fail }); Native.httpPost(id, url, JSON.stringify(headers || {}), typeof body === 'string' ? body : JSON.stringify(body)); setTimeout(() => { if (pending.delete(id)) fail(new Error('zaman aşımı')); }, 140000); });
+}
