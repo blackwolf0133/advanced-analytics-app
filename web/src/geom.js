@@ -99,3 +99,86 @@ export function fitStrip(row) {
   const l = best.ls[Math.floor(best.ls.length / 2)], F = best.b1 - l;   // kutunun okunabildigi sol kenarlarin ortasi
   return { l, w: Math.round(F + (best.cols - 1) * P), cols: best.cols, first: Math.round(F / P * 100) / 100, pitch: P };
 }
+
+/* ---------- cok satirli tablo: satir/sutun duzeni goruntuden ---------- */
+/** Her satirin yazi olcusu (satir boyunca parlaklik degisimi). */
+export function rowProfile(img) {
+  const out = new Float32Array(img.h);
+  for (let y = 0; y < img.h; y++) {
+    let s = 0, s2 = 0;
+    for (let x = 0; x < img.w; x++) { const i = (y * img.w + x) * 3, v = Math.max(img.d[i], img.d[i + 1], img.d[i + 2]); s += v; s2 += v * v; }
+    const m = s / img.w; out[y] = Math.sqrt(Math.max(0, s2 / img.w - m * m));
+  }
+  return out;
+}
+/** Bir eksende tekrarlayan hucre duzeni: adim (P) ve sinir kaymasi (phi). Sinirlar yazinin olmadigi yerlere duser. */
+export function fitAxis(prof, lo, hi) {
+  const N = prof.length; lo = Math.max(6, lo); hi = Math.min(hi, N / 2); if (hi <= lo) return null;
+  const cs = new Float64Array(N + 1); for (let i = 0; i < N; i++) cs[i + 1] = cs[i] + prof[i];
+  const sm = (x, r) => { x = Math.round(x); const a = Math.max(0, x - r), b = Math.min(N - 1, x + r); return a > b ? 0 : (cs[b + 1] - cs[a]) / (b - a + 1); };
+  // dogru adimda hucre ortalari yazinin, sinirlar bosluklarin ustune duser: (orta - sinir) farki en buyuk olan adim ve kayma.
+  // Iki kati adimda "ortalar" bosluga, yarisinda "sinirlar" yaziya denk gelir; ikisi de dusuk puan alir.
+  // bos kenarlar (yazi yok) puanlamaya katilmaz
+  const m0 = cs[N] / N; let A = 0, Z = N - 1; while (A < N && prof[A] < 0.3 * m0) A++; while (Z > A && prof[Z] < 0.3 * m0) Z--;
+  const all = [];
+  for (let p = lo; p <= hi; p += 0.5) {
+    const r = Math.max(1, Math.round(p * 0.08)); let pb = null;
+    for (let f = 0; f < p; f += 1) {
+      let B = 0, C = 0, n = 0, nb = 0;
+      for (let x = f; x < N; x += p) { if (x >= A - r && x <= Z + r) { B += sm(x, r); nb++; } if (x + p / 2 >= A && x + p / 2 <= Z) { C += sm(x + p / 2, r); n++; } }
+      if (!n || !nb) continue; const v = C / n - B / nb;
+      if (!pb || v > pb.v) pb = { P: p, phi: f, v };
+    }
+    if (pb) all.push(pb);
+  }
+  if (!all.length) return null;
+  const top = Math.max(...all.map((c) => c.v)); if (top < 0.25 * m0) return null;
+  // neredeyse esit puanlilardan en kucuk adim (iki-uc kati adim da benzer puan alabilir)
+  // iki-uc kati adimda da sinirlar bosluklara, ortalar yaziya denk gelebilir: kati bulunduysa gercek adim onun yarisi/ucte biridir
+  // iki-uc kati adimda da sinirlar bosluklara, ortalar yaziya denk gelebilir: yarisi/ucte biri de aday olur (okumayla secilir)
+  const best = all.find((c) => c.v === top), out = [best];
+  for (const d of [2, 3]) {
+    const near = all.filter((c) => Math.abs(c.P - best.P / d) <= 2.5).sort((a, b) => b.v - a.v)[0];
+    if (near && near.v >= 0.7 * top) out.push(near);
+  }
+  return all ? Object.assign(best, { alts: out }) : null;
+}
+/** Adim ve kaymaya gore tam gorunen hucre araliklari [bas, son]. */
+export function axisCells(N, P, phi, prof = null) {
+  // kenarda kesilen hucre: bolge kenari yazinin ustunden geciyorsa (yari gorunen satir) alinmaz
+  const mean = prof ? prof.reduce((s, v) => s + v, 0) / N : 0, edge = (i) => !prof || (prof[i] + prof[Math.min(N - 1, i + 1)] + prof[Math.max(0, i - 1)]) / 3 <= 0.5 * mean;
+  const out = [];
+  for (let b = phi - P; b < N; b += P) {
+    if (b + P <= 0.3 * P || b >= N - 0.3 * P) continue;
+    if (b < -0.18 * P && (b < -0.45 * P || !edge(0))) continue;
+    if (b + P > N + 0.18 * P && (b + P > N + 0.45 * P || !edge(N - 1))) continue;
+    out.push([Math.max(0, Math.round(b)), Math.min(N, Math.round(b + P))]);
+  }
+  return out;
+}
+/** Tablo goruntusunun hucreleri: { xs, ys } ya da null. Satir/sutun sayisi verilmez; olculur. */
+export function fitGrid(img) {
+  const px = stripProfile(img), cx = fitAxis(px, img.w * 0.03, img.w / 3); if (!cx) return null;
+  const py = rowProfile(img), opts = [];
+  for (const ax of cx.alts) {
+    const xs = axisCells(img.w, ax.P, ax.phi, px); if (xs.length < 2) continue;
+    if (img.h < ax.P * 0.4 * 2.2) { opts.push({ xs, ys: [[0, img.h]] }); continue; }
+    const cy = fitAxis(py, ax.P * 0.35, ax.P * 1.6);
+    for (const ay of cy ? cy.alts : [null]) { const ys = ay ? axisCells(img.h, ay.P, ay.phi, py) : [[0, img.h]]; if (ys.length) opts.push({ xs, ys }); }
+  }
+  if (opts.length <= 1) return opts[0] || null;
+  // adaylar arasinda okumayla secim: ornek hucrelerin okunabilen orani en yuksek olan duzen
+  let best = null;
+  for (const o of opts) {
+    let ok = 0, n = 0; const r0 = Math.max(0, Math.floor(o.ys.length / 2) - 2);   // ortadan art arda satirlar (atlamali ornek yaniltir)
+    for (let r = r0; r < Math.min(o.ys.length, r0 + 4); r++) for (const [x0, x1] of o.xs) { n++; if (readCell(sub(img, x0, o.ys[r][0], x1, o.ys[r][1]))[0] !== null) ok++; }
+    const sc = ok / n + 0.0001 * o.xs.length * o.ys.length; if (!best || sc > best.sc) best = { ...o, sc };
+  }
+  return { xs: best.xs, ys: best.ys };
+}
+/** Tablodaki sayilar satir satir (soldan saga, yukaridan asagi); okunamayan null. */
+export function readGrid(img, g) {
+  const out = [];
+  for (const [y0, y1] of g.ys) for (const [x0, x1] of g.xs) { const v = readCell(sub(img, x0, y0, x1, y1))[0]; out.push(v === null ? null : Number(v)); }
+  return out;
+}

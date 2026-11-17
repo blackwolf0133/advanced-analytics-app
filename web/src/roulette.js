@@ -60,3 +60,27 @@ export function hotCold(s, k = 5) {
   const o = c.map((n, v) => ({ v, n })).sort((a, b) => b.n - a.n || a.v - b.v);
   return { hot: o.slice(0, k), cold: o.slice(-k).reverse() };
 }
+
+/**
+ * Ekrandan okunan gecmisi oturuma ekler. hist: en yeni basta (okunamayan null).
+ * Gecmis, kayitli sayilarla ortak kismindan hizalanir: kayitlilardan eskiler basa, yeniler sona (ice aktarilmis olarak) eklenir.
+ * Kaydirilan tablonun her sayfasi ayri ayri eklenebilir. force: eslesme yoksa kayitlilarin hemen oncesine ekle.
+ * Donus: { old, fresh, skipped, matched } ya da { error: 'nomatch' }.
+ */
+export function mergeHistory(s, hist, force = false) {
+  const h = hist.slice().reverse(), m = h.length, S = values(s), n = S.length, skipped = h.filter((v) => v === null).length;
+  const mk = (v) => ({ v, imp: 1 });
+  if (!n) { const add = h.filter((v) => v !== null); s.spins.push(...add.map(mk)); return { old: add.length, fresh: 0, skipped, matched: 0 }; }
+  let best = null;
+  for (let d = -(m - 1); d <= n - 1; d++) {          // h[i] <-> S[i + d]
+    let ok = 0, bad = 0;
+    for (let i = Math.max(0, -d); i < m && i + d < n; i++) { const a = h[i]; if (a === null) continue; if (a === S[i + d]) ok++; else bad++; }
+    if (ok < 2 || bad * 10 > ok + bad) continue;
+    if (!best || ok > best.ok || (ok === best.ok && d > best.d)) best = { d, ok };
+  }
+  if (!best && !force) return { error: 'nomatch' };
+  const d = best ? best.d : -m, pre = [], post = [];
+  for (let i = 0; i < m; i++) { if (h[i] === null) continue; if (i + d < 0) pre.push(h[i]); else if (i + d >= n) post.push(h[i]); }
+  s.spins.unshift(...pre.map(mk)); s.spins.push(...post.map(mk));
+  return { old: pre.length, fresh: post.length, skipped, matched: best ? best.ok : 0 };
+}

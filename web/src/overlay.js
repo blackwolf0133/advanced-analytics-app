@@ -1,7 +1,7 @@
 // Yuzen pencere: bolge secimi, ekrandan sayi okuma, takip ve tahmin gosterimi. Oyunun ustunde durur.
 import * as R from './roulette.js';
 import { fromRGBA } from './digits.js';
-import { cellRects, newestRects, readRects, alignStrip, fitStrip } from './geom.js';
+import { cellRects, newestRects, readRects, alignStrip, fitStrip, fitGrid } from './geom.js';
 import { sub } from './digits.js';
 import { Tracker, TRACK } from './tracker.js';
 import { loadRoulette, activeSession, withActive, read, write } from './store.js';
@@ -88,7 +88,11 @@ function render() {
 }
 function stop(msg) { st.running = false; st.tracker = null; st.first = null; st.peek = null; if (msg) say(msg); render(); }
 function start() {
-  if (!st.cfg) { openPicker(); return; }
+  if (!st.cfg) {                                         // "Geçmiş"te serit secildiyse takip icin de o kullanilir
+    const h = read('hist', null);
+    if (h && h.kind === 'strip') { st.cfg = { l: h.l, t: h.t, w: h.w, h: h.h, rows: 1, cols: h.cols, first: h.first, newest: h.newest, sw: h.sw, sh: h.sh }; write('screen', st.cfg); }
+    else { openPicker(); return; }
+  }
   st.running = true; st.tracker = null; st.first = null; st.saved = 0; st.imported = 0; st.bad = 0; st.fixAt = 0; st.peek = null;
   say('Başlatılıyor…'); render();
 }
@@ -128,19 +132,63 @@ function tick() {
       st.saved += r.fresh.length; say(`Yeni sayı: ${r.fresh.join(', ')} · toplam ${st.saved} yeni sayı`); render();
     } else if (r.state === 'unreadable') say('Sayılar şu an okunamıyor. Pencere sayıların üstünü kapatmasın.');
     else if (r.state === 'resync') say('Sıra eşleşmedi; arada tur kaçmış olabilir. Sıra yeniden başlatıldı.');
-    else if (r.state === 'started') say('Okuma başladı. Yeni sayılar bekleniyor.');
+    else if (r.state === 'started') {                    // okuma durmusken gelen sayilar varsa eklenir
+      const m = withActive((x) => R.mergeHistory(x, vals)), k = m && !m.error ? m.fresh + m.old : 0; if (k) render();
+      say(`Okuma başladı${k ? ` (${k} eksik sayı eklendi)` : ''}. Yeni sayılar bekleniyor.`);
+    }
     else if (r.state === 'same' && !st.status.startsWith('Yeni') && !st.status.includes('aktarıldı')) say(`Okunuyor: ${vals.map((v) => v ?? '?').join(' ')}`);
   } catch (e) { say('Hata: ' + e.message); } finally { st.busy = false; }
 }
 
 /* ---------------- bolge secimi ---------------- */
-function openPicker() {
+function openPicker(hist = false) {
   const was = st.running; st.running = false;
-  setMode('full');
-  const p = st.pick = { rect: null, rows: st.cfg?.rows ?? 9, cols: st.cfg?.cols ?? 10, first: st.cfg?.first ?? 1, newest: st.cfg?.newest ?? 'first', results: null, was };
+  setMode('full'); document.body.classList.toggle('hist', hist);
+  const src = hist ? read('hist', null) : st.cfg;
+  const p = st.pick = { rect: null, rows: src?.rows ?? (hist ? 1 : 9), cols: src?.cols ?? (hist ? 14 : 10), first: src?.first ?? (hist ? 1.6 : 1), newest: src?.newest ?? 'first', results: null, was, hist, kind: src?.kind ?? 'grid' };
+  $('#testb').textContent = hist ? 'Oku' : 'Dene'; $('#saveb').textContent = hist ? 'Ekle' : 'Kaydet';
   $('#hint').textContent = 'Ekran görüntüsü alınıyor…';
-  setTimeout(() => { if (shoot() && st.cfg && st.cfg.sw === p.iw && st.cfg.sh === p.ih) { p.rect = { l: st.cfg.l, t: st.cfg.t, w: st.cfg.w, h: st.cfg.h }; } draw(); }, 60);
+  setTimeout(() => {
+    if (shoot() && src && src.sw === p.iw && src.sh === p.ih) p.rect = { l: src.l, t: src.t, w: src.w, h: src.h };
+    draw(); if (hist && p.rect) histRead();          // gecmis: son secilen yer hemen okunur (tablo kaydirildiysa yeni sayfa)
+  }, 60);
 }
+/** Gecmis: secili yerdeki butun sayilari okur. Tablo ise satir/sutun duzeni goruntuden olculur; tek sira ise serit duzeni kullanilir. */
+function histRead() {
+  const p = st.pick, r = p.rect; if (!r) return;
+  $('#hint').textContent = 'Okunuyor…';
+  setTimeout(() => {
+    const img = decode(Native.grabFrozen(r.l, r.t, r.w, r.h));
+    if (!img) { $('#hint').textContent = 'Bölge okunamadı.'; return; }
+    let cells = null;
+    if (p.kind === 'strip') cells = newestRects({ l: 0, t: 0, w: r.w, h: r.h, rows: 1, cols: p.cols, first: p.first, newest: p.newest }, p.cols).rects;
+    else {
+      const g = fitGrid(img), fs = g && g.ys.length === 1 ? fitStrip(img) : null;
+      if (fs) cells = newestRects({ l: 0, t: 0, w: fs.w, h: r.h, rows: 1, cols: fs.cols, first: fs.first, newest: p.newest }, fs.cols).rects.map((c) => ({ ...c, x0: c.x0 + fs.l, x1: c.x1 + fs.l }));
+      else if (g) { cells = []; for (const [y0, y1] of g.ys) for (const [x0, x1] of g.xs) cells.push({ x0, y0, x1, y1 }); if (p.newest === 'last') cells.reverse(); }
+    }
+    if (!cells || !cells.length) { p.cells = null; p.results = null; p.histVals = null; draw(); $('#hint').textContent = 'Burada düzenli bir sayı tablosu bulunamadı. Sayıların olduğu yeri biraz daha geniş çerçeveleyin.'; return; }
+    const vals = readRects(img, { rects: cells, x0: 0, y0: 0 });
+    p.cells = cells; p.histVals = vals; p.force = false; p.results = vals.map((v, i) => ({ v, c: cells[i] }));
+    p.rows = new Set(cells.map((c) => c.y0)).size; draw();
+    const ok = vals.filter((v) => v !== null).length, bad = vals.length - ok;
+    $('#hint').textContent = ok ? `${ok} sayı okundu${bad ? ` (${bad} hücre okunamadı, atlanacak)` : ''}. Sayılar doğruysa “Ekle”ye dokunun. Tablonun devamı için: ekleyin, oyunda tabloyu kaydırın, yine “Geçmiş”e dokunun.`
+      : 'Burada sayı okunamadı. Sayıların olduğu yeri çerçeveleyin ya da tek sıralık şeride dokunun.';
+  }, 30);
+}
+function histSave() {
+  const p = st.pick;
+  if (!p.histVals || !p.histVals.some((v) => v !== null)) { $('#hint').textContent = 'Önce sayıların olduğu yeri seçin.'; return; }
+  const r = withActive((s) => { const m = R.mergeHistory(s, p.histVals, p.force); return { ...m, total: s.spins.length }; });
+  if (!r) { $('#hint').textContent = 'Uygulamada bir rulet oturumu açın.'; return; }
+  if (r.error) { p.force = true; $('#hint').textContent = 'Bu sayılar kayıtlı sayılarla eşleşmedi (ortak sıra bulunamadı). Yine de kayıtlıların öncesine eklemek için “Ekle”ye bir daha dokunun; emin değilseniz “İptal”.'; return; }
+  write('hist', { ...p.rect, kind: p.kind, rows: p.rows, cols: p.cols, first: p.first, newest: p.newest, sw: p.iw, sh: p.ih });
+  closePicker(); st.tracker = null; st.first = null;
+  const k = r.old + r.fresh;
+  say(k ? `Geçmiş eklendi: ${k} sayı${r.skipped ? `, ${r.skipped} okunamayan atlandı` : ''}. Oturumda ${r.total} sayı var.` : 'Bu sayılar zaten kayıtlı. Tablonun devamı için oyunda tabloyu kaydırıp yine “Geçmiş”e dokunun.');
+  render();
+}
+function closePicker() { const p = st.pick; setMode('mini'); document.body.classList.remove('hist'); st.pick = null; if (p) st.running = p.was; }
 function shoot() {
   const p = st.pick, s = Native.screenshot();
   if (!s) { $('#hint').textContent = 'Ekran görüntüsü alınamadı. Yüzen pencereyi kapatıp yeniden açın.'; return false; }
@@ -159,14 +207,15 @@ function draw() {
   $('#preset').textContent = p.rows === 1 ? 'Tablo' : 'Tek sıra';
   g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
   for (const el of document.querySelectorAll('.only1')) el.style.display = p.rows === 1 ? '' : 'none'; $('#rowbox').style.display = p.rows === 1 ? 'none' : '';
+  if (!p.rect && p.hist) { $('#hint').textContent = 'Geçmişi okumak için: sayı tablosunu parmakla çerçeveleyin ya da tek sıralık şeride bir kez dokunun. Ne seçerseniz oradaki bütün sayılar okunur.'; return; }
   if (!p.rect) { $('#hint').textContent = p.rows === 1 ? 'Sayıların olduğu şeride parmağınızla BİR KEZ DOKUNUN; yerini program kendisi bulur.' : 'Parmağınızla sayıların olduğu tabloyu çerçeveleyin. Üstteki tek sıralık şerit için “Tek sıra”ya dokunun.'; return; }
-  const X = (x) => p.ox + x * p.scale, Y = (y) => p.oy + y * p.scale, r = p.rect, rects = cellRects({ ...r, rows: p.rows, cols: p.cols, first: p.first, newest: p.newest });
+  const X = (x) => p.ox + x * p.scale, Y = (y) => p.oy + y * p.scale, r = p.rect, rects = p.cells || cellRects({ ...r, rows: p.rows, cols: p.cols, first: p.first, newest: p.newest });
   g.fillStyle = 'rgba(0,0,0,.5)'; g.fillRect(0, 0, cv.width, cv.height); g.clearRect(X(r.l), Y(r.t), r.w * p.scale, r.h * p.scale);
   g.strokeStyle = '#f2c94c'; g.lineWidth = 2; g.strokeRect(X(r.l), Y(r.t), r.w * p.scale, r.h * p.scale);
   g.lineWidth = 1; g.beginPath();
   for (const c of rects) { g.moveTo(X(r.l + c.x1), Y(r.t + c.y0)); g.lineTo(X(r.l + c.x1), Y(r.t + c.y1)); g.moveTo(X(r.l + c.x0), Y(r.t + c.y1)); g.lineTo(X(r.l + c.x1), Y(r.t + c.y1)); }
   g.stroke();
-  if (p.rows === 1) zoom(g, p, rects);
+  if (p.rows === 1 && !p.cells) zoom(g, p, rects);
   if (p.results) {
     const ch = (rects[0].y1 - rects[0].y0) * p.scale, below = p.rows === 1;
     g.font = `700 ${Math.max(10, Math.min(15, below ? 14 : ch * 0.42))}px monospace`; g.textAlign = below ? 'center' : 'right'; g.textBaseline = 'top';
@@ -190,6 +239,7 @@ function zoom(g, p, rects) {
     for (const { v, c } of p.results) { if (!part.includes(c)) continue; g.fillStyle = '#000a'; const x = (r.l + (c.x0 + c.x1) / 2 - sx) * z; g.fillRect(x - 15, dy + dh - 21, 30, 20); g.fillStyle = v === null ? '#ff5d52' : '#58e08f'; g.fillText(v === null ? '?' : String(v), x, dy + dh - 19); } }
 }
 function test() {
+  if (st.pick.hist) { histRead(); return; }
   const p = st.pick, c = { ...p.rect, rows: p.rows, cols: p.cols, first: p.first, newest: p.newest }, n = p.rows * p.cols, v = readNewest(c, n, (l, t, w, h) => Native.grabFrozen(l, t, w, h));
   if (Array.isArray(v)) { const rects = newestRects(c, n).rects; p.results = v.map((x, i) => ({ v: x, c: rects[i] })); draw(); }
   else { p.results = null; draw(); $('#hint').textContent = v === 'black' ? BLACK : 'Bölge okunamadı.'; }
@@ -202,7 +252,7 @@ function autoStrip(y) {
   setTimeout(() => {
     const a = findStrip({ ...base, rows: 1, cols: p.cols, first: p.first, newest: p.newest }, p.iw, p.ih, (l, t, w, hh) => Native.grabFrozen(l, t, w, hh));
     if (a === 'black') { p.rect = base; p.results = null; draw(); $('#hint').textContent = BLACK; return; }
-    if (a) { p.rect = { l: a.l, w: a.w, t: a.t, h: a.h }; p.cols = a.cols; p.first = a.first; test(); } else p.rect = base;
+    if (a) { p.rect = { l: a.l, w: a.w, t: a.t, h: a.h }; p.cols = a.cols; p.first = a.first; p.kind = 'strip'; p.cells = null; test(); } else p.rect = base;
     if (a) return; else { p.results = null; draw(); $('#hint').textContent = 'Burada sayı şeridi bulunamadı. Tam sayıların üstüne dokunun; olmazsa ▲ ▼ ile sarı kutuyu sayıların üstüne getirip “Dene”ye dokunun.'; }
   }, 30);
 }
@@ -214,11 +264,12 @@ function bindPicker() {
   cv.addEventListener('pointermove', (e) => {
     if (!a) return; const b = pos(e), p = st.pick;
     if (!moved && Math.hypot(a.x - b.x, a.y - b.y) * p.scale < 14) return; moved = true;
-    p.rect = { l: Math.round(Math.min(a.x, b.x)), t: Math.round(Math.min(a.y, b.y)), w: Math.round(Math.abs(a.x - b.x)), h: Math.round(Math.abs(a.y - b.y)) }; p.results = null; draw();
+    p.rect = { l: Math.round(Math.min(a.x, b.x)), t: Math.round(Math.min(a.y, b.y)), w: Math.round(Math.abs(a.x - b.x)), h: Math.round(Math.abs(a.y - b.y)) }; p.results = null; p.cells = null; p.histVals = null; draw();
   });
   cv.addEventListener('pointerup', () => { const p = st.pick, at = a; a = null; if (!at || !p) return;
-    if (!moved) { if (p.rows !== 1) { p.rows = 1; p.cols = 14; p.first = 1.6; } autoStrip(at.y); return; }   // tek dokunus her zaman serit arar
-    if (p.rect && (p.rect.w < 12 || p.rect.h < 8)) { p.rect = keep; draw(); } });
+    if (!moved) { if (p.rows !== 1 || p.cells) { p.rows = 1; p.cols = 14; p.first = 1.6; p.cells = null; } autoStrip(at.y); return; }   // tek dokunus her zaman serit arar
+    if (p.rect && (p.rect.w < 12 || p.rect.h < 8)) { p.rect = keep; draw(); return; }
+    if (p.hist) { p.kind = 'grid'; histRead(); } });
   $('#bar').addEventListener('click', (e) => {
     const b = e.target.closest('[data-a]'); if (!b) return; const p = st.pick, act = b.dataset.a;
     if (act === 'r-' || act === 'r+') p.rows = Math.max(1, Math.min(14, p.rows + (act === 'r+' ? 1 : -1)));
@@ -228,17 +279,18 @@ function bindPicker() {
     else if (act === 'up' || act === 'down' || act === 'thin' || act === 'thick') { if (!p.rect) return; const k = Math.max(1, Math.round(p.iw / 540)), r = p.rect;
       if (act === 'up') r.t = Math.max(0, r.t - k); else if (act === 'down') r.t = Math.min(p.ih - r.h, r.t + k); else if (act === 'thin') { if (r.h > 12) { r.h -= 2 * k; r.t += k; } } else { r.h += 2 * k; r.t = Math.max(0, r.t - k); } }
     else if (act === 'align') { if (p.rect) autoStrip(null); return; }
-    else if (act === 'newest') p.newest = p.newest === 'first' ? 'last' : 'first';
+    else if (act === 'newest') { p.newest = p.newest === 'first' ? 'last' : 'first'; if (p.hist) { histRead(); return; } }
     else if (act === 'flip') { $('#bar').classList.toggle('up'); return; }
-    else if (act === 'cancel') { setMode('mini'); st.pick = null; render(); return; }
+    else if (act === 'cancel') { closePicker(); render(); return; }
     else if (act === 'test') {
       if (!p.rect) return; $('#hint').textContent = 'Okunuyor…';
       setTimeout(() => { if (shoot()) test(); }, 30);
       return;
     } else if (act === 'save') {
+      if (p.hist) { histSave(); return; }
       if (!p.rect) { $('#hint').textContent = 'Önce tabloyu çerçeveleyin.'; return; }
       st.cfg = { ...p.rect, rows: p.rows, cols: p.cols, first: p.rows === 1 ? p.first : 1, newest: p.newest, sw: p.iw, sh: p.ih }; write('screen', st.cfg);
-      setMode('mini'); st.pick = null; say('Bölge kaydedildi. “Başlat”a dokunun.'); render(); return;
+      closePicker(); st.running = false; say('Bölge kaydedildi. “Başlat”a dokunun.'); render(); return;
     }
     if (act !== 'test') p.results = null;
     draw();
@@ -246,11 +298,12 @@ function bindPicker() {
 }
 
 /* ---------------- baslangic ---------------- */
-$('#region').onclick = openPicker;
+$('#region').onclick = () => openPicker(false);
+$('#hist').onclick = () => openPicker(true);
 $('#run').onclick = () => (st.running ? stop('Okuma durduruldu.') : start());
 $('#close').onclick = () => Native.stopCapture();
 $('#top').onclick = () => setMode(st.mode === 'ball' ? 'mini' : 'ball');
 bindPicker();
-window.AADO = { onScreen: () => { if (st.mode === 'full') { setMode('mini'); st.pick = null; } } };
+window.AADO = { onScreen: () => { if (st.mode === 'full') closePicker(); } };
 say(st.cfg ? '“Başlat”a dokunun. Pencereyi üst çubuğundan sürükleyebilirsiniz.' : 'Oyunu açın, sonra “Bölge”ye dokunup sayıların olduğu tabloyu seçin.');
 render(); setInterval(tick, 400);

@@ -15,13 +15,14 @@
   .zone { margin: 0; gap: 3px; } .zone .ball { min-width: 21px; height: 21px; font-size: 10px; border-radius: 11px; }
   #peek { width: 100%; height: 20px; border: 1px solid var(--line); border-radius: 4px; image-rendering: auto; object-fit: fill; }
   #status { color: var(--muted); font-size: 10.5px; line-height: 1.25; flex: 1; overflow: hidden; }
-  #btns { display: grid; grid-template-columns: 1fr 1fr 30px; gap: 5px; } #btns button { min-height: 32px; padding: 2px 4px; font-size: 12px; border-radius: 8px; }
+  #btns { display: grid; grid-template-columns: 1fr 1fr 1fr 26px; gap: 4px; } #btns button { min-height: 32px; padding: 2px 2px; font-size: 11.5px; border-radius: 8px; }
   body.ball #zones, body.ball #status, body.ball #btns, body.ball #info small { display: none; } body.ball #mini { padding: 5px; }
   #pick { position: fixed; inset: 0; background: #000; display: none; } body.full #pick { display: block; } body.full #mini { display: none; }
   #shot, #cv { position: absolute; left: 0; top: 0; } #cv { touch-action: none; }
   #bar { position: absolute; left: 0; right: 0; bottom: 0; background: #101720ee; border-top: 1px solid var(--line); padding: 6px 8px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 13px; }
   #bar.up { bottom: auto; top: 0; border-top: 0; border-bottom: 1px solid var(--line); }
   #bar button { min-height: 36px; padding: 4px 10px; } #bar .st { display: inline-flex; align-items: center; gap: 4px; } #bar .st b { min-width: 20px; text-align: center; font-family: var(--mono); }
+  body.hist #rowbox, body.hist #colbox, body.hist #firstbox, body.hist .only1, body.hist #preset { display: none !important; }
   #hint { flex-basis: 100%; color: var(--muted); font-size: 12px; }
 </style>
 </head>
@@ -31,19 +32,19 @@
   <div id="zones"></div>
   <canvas id="peek" style="display:none"></canvas>
   <div id="status"></div>
-  <div id="btns"><button id="region">Bölge</button><button id="run" class="primary">Başlat</button><button id="close" title="Kapat">×</button></div>
+  <div id="btns"><button id="region">Bölge</button><button id="hist">Geçmiş</button><button id="run" class="primary">Başlat</button><button id="close" title="Kapat">×</button></div>
 </div>
 <div id="pick">
   <img id="shot" alt=""><canvas id="cv"></canvas>
   <div id="bar">
     <span class="st" id="rowbox">Satır <button data-a="r-">−</button><b id="rows"></b><button data-a="r+">+</button></span>
-    <span class="st">Sütun <button data-a="c-">−</button><b id="cols"></b><button data-a="c+">+</button></span>
+    <span class="st" id="colbox">Sütun <button data-a="c-">−</button><b id="cols"></b><button data-a="c+">+</button></span>
     <span class="st" id="firstbox">İlk kutu <button data-a="f-">−</button><b id="first"></b><button data-a="f+">+</button></span>
     <span class="st only1">Kutu <button data-a="up">▲</button><button data-a="down">▼</button><button data-a="thin">İnce</button><button data-a="thick">Kalın</button></span>
     <button data-a="align" class="only1">Hizala</button>
     <button data-a="preset" id="preset"></button>
     <button data-a="newest" id="newest"></button>
-    <button data-a="test">Dene</button><button data-a="save" class="primary">Kaydet</button><button data-a="cancel">İptal</button><button data-a="flip" title="Çubuğu taşı">⇅</button>
+    <button data-a="test" id="testb">Dene</button><button data-a="save" id="saveb" class="primary">Kaydet</button><button data-a="cancel">İptal</button><button data-a="flip" title="Çubuğu taşı">⇅</button>
     <span id="hint"></span>
   </div>
 </div>
