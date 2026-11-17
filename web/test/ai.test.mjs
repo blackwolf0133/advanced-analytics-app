@@ -24,3 +24,10 @@ test('tartisma: 1. tur bagimsiz, 2. tur digerlerini gorur; hata veren devam etti
   assert.strictEqual(res.rounds, 2); assert.ok(seen.filter((x) => x.round2).length === 3 && ok.every((a) => a.final.gerekce === 'Diğerleriyle uzlaştım.'));
   assert.strictEqual(res.cons.ms.score, '1-0'); assert.ok(tries.get('kilo-auto/free') >= 2);
 });
+test('sure siniri: yavas analist 2. turda beklenmez, ilk gorusu kullanilir', async () => {
+  const post = async (url, h, body) => { const b = JSON.parse(body), r2 = b.messages[1].content.includes('Diğer analistlerin');
+    if (r2 && b.model === 'Qwen3.5-397B-A17B') await new Promise((ok) => setTimeout(ok, 400));
+    return JSON.stringify({ choices: [{ message: { content: JSON.stringify({ p1: 50, px: 30, p2: 20, iy_skor: '0-0', ms_skor: '1-0', gerekce: r2 ? 'son' : 'ilk' }) } }] }); };
+  const t0 = Date.now(), res = await debate(post, PROVIDERS.filter((p) => ['ovh-gpt', 'ovh-qwen', 'kilo'].includes(p.id)), {}, 'veri', () => {}, [1000, 150]);
+  const q = res.agents.find((a) => a.prov.id === 'ovh-qwen'); assert.ok(Date.now() - t0 < 1000 && q.error2 === 'süre doldu' && q.final.gerekce === 'ilk' && res.agents.find((a) => a.prov.id === 'kilo').final.gerekce === 'son');
+});

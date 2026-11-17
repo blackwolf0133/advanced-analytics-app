@@ -36,9 +36,9 @@ export function render(m, res) {
     <p class="fpred muted">${c.n} yapay zekânın ${c.agree} tanesi aynı sonucu (${L[c.pick]}) seçti${c.ust25 != null ? ` · 2,5 üst %${Math.round(c.ust25)}` : ''}${c.kg != null ? ` · karşılıklı gol %${Math.round(c.kg)}` : ''}${model == null ? '' : model === c.pick ? ' · istatistik modeliyle aynı sonuç' : ` · istatistik modeli farklı düşünüyor (${L[model]})`}
       ${done ? `<br><b class="${c.pick === y ? 'ok' : 'no'}">Ortak karar ${c.pick === y ? 'tuttu ✓' : 'tutmadı ✗ 😞'}</b>` : ''}</p>
     ${res.agents.map((a) => `<div class="aiag"><b>Analist ${a.letter} · ${esc(a.prov.name)}</b> <span class="muted">(${esc(a.prov.host)})</span><br>
-      ${a.final ? `${a.first && a.final !== a.first && pv(a.first) !== pv(a.final) ? `<span class="muted">İlk görüş: ${pv(a.first)} → </span>` : ''}Son karar: ${pv(a.final)} · İY ${esc(a.final.iy_skor || '?')} · MS ${esc(a.final.ms_skor || '?')}${a.final.guven ? ` · güven ${esc(a.final.guven)}` : ''}
+      ${a.final ? `${a.first && a.final !== a.first && pv(a.first) !== pv(a.final) ? `<span class="muted">İlk görüş: ${pv(a.first)} → </span>` : ''}${a.error2 ? '<span class="muted">(2. turda süre doldu; ilk görüşü kullanıldı) </span>' : ''}Son karar: ${pv(a.final)} · İY ${esc(a.final.iy_skor || '?')} · MS ${esc(a.final.ms_skor || '?')}${a.final.guven ? ` · güven ${esc(a.final.guven)}` : ''}
         ${a.final.gerekce ? `<br><span class="muted">${esc(a.final.gerekce)}</span>` : ''}` : `<span class="no">Yanıt alınamadı (${esc(a.error || 'bilinmeyen hata')})</span>`}</div>`).join('')}
-    <p class="muted" style="margin:8px 0 0;font-size:12px">Yapay zekâların internet erişimi yok; yalnızca bu ekrandaki verilerle (model olasılıkları, son maçlar) akıl yürütürler, haber ve sakatlık bilmezler. Ortak karar: olasılıkların ortalaması ve skorlarda oylama. Eğlence amaçlıdır.</p>
+    <p class="muted" style="margin:8px 0 0;font-size:12px">Yapay zekâların internet erişimi yok; yalnızca bu ekrandaki verilerle (model olasılıkları, son maçlar, aralarındaki maçlar) akıl yürütürler, haber ve sakatlık bilmezler; bu yüzden çoğu zaman istatistik modeline yakın düşünürler. Bir analiz 1–3 dakika sürebilir. Ortak karar: olasılıkların ortalaması ve skorlarda oylama. Eğlence amaçlıdır.</p>
     <button class="aibtn" data-ai-re="${m.id}" style="margin-top:8px">Yeniden sor</button></div>`;
 }
 

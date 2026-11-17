@@ -6,7 +6,7 @@
 
 export const PROVIDERS = [
   { id: 'ovh-gpt', name: 'gpt-oss-120b', host: 'OVHcloud', url: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions', model: 'gpt-oss-120b', key: false, extra: { reasoning_effort: 'low' } },
-  { id: 'ovh-qwen', name: 'Qwen 3.5 (397B)', host: 'OVHcloud', url: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions', model: 'Qwen3.5-397B-A17B', key: false, tokens: 6000 },
+  { id: 'ovh-qwen', name: 'Qwen 3.5 (397B)', host: 'OVHcloud', url: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions', model: 'Qwen3.5-397B-A17B', key: false, tokens: 4000 },
   { id: 'ovh-ds', name: 'DeepSeek V4.1 Flash', host: 'OVHcloud', url: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions', model: 'DeepSeek-V4.1-Flash-1017', key: false },
   { id: 'kilo', name: 'Kilo ücretsiz model', host: 'Kilo', url: 'https://api.kilo.ai/api/gateway/chat/completions', model: 'kilo-auto/free', key: false, fallback: ['nvidia/nemotron-3.5-lightning:free', 'dots-studio/dots-3-note-preview:free'] },
   { id: 'groq', name: 'gpt-oss-120b', host: 'Groq', url: 'https://api.groq.com/openai/v1/chat/completions', model: 'openai/gpt-oss-120b', key: true, keyUrl: 'console.groq.com/keys', extra: { reasoning_effort: 'low' } },
@@ -82,14 +82,16 @@ async function ask(post, prov, key, msgs) {
  * Tartisma: 1. tur bagimsiz, 2. tur (en az iki cevap geldiyse) digerlerini gorup son karar. onStep(metin) ilerleme bildirir.
  * Donus: { agents: [{ letter, prov, first, final, error }], cons, rounds }
  */
-export async function debate(post, providers, keys, brief, onStep = () => {}) {
+/** Bir analiste ayrilan sure: dolarsa o turda beklenmez (2. turda ilk gorusu kullanilir). */
+const limit = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('süre doldu')), ms))]);
+export async function debate(post, providers, keys, brief, onStep = () => {}, budget = [90000, 60000]) {
   const agents = providers.map((prov, i) => ({ letter: LETTERS[i], prov, first: null, final: null, error: null }));
   onStep(`1. tur: ${agents.length} yapay zekâ maçı ayrı ayrı inceliyor…`);
-  await Promise.all(agents.map(async (g) => { try { g.first = await ask(post, g.prov, keys[g.prov.id], messages1(brief)); } catch (e) { g.error = e.message; } }));
+  await Promise.all(agents.map(async (g) => { try { g.first = await limit(ask(post, g.prov, keys[g.prov.id], messages1(brief)), budget[0]); } catch (e) { g.error = e.message; } }));
   const ok = agents.filter((g) => g.first); let rounds = 1;
   if (ok.length >= 2) {
     rounds = 2; onStep(`2. tur: ${ok.length} yapay zekâ birbirinin görüşünü tartışıyor…`);
-    await Promise.all(ok.map(async (g) => { try { g.final = await ask(post, g.prov, keys[g.prov.id], messages2(brief, g.first, ok.filter((o) => o !== g).map((o) => ({ letter: o.letter, a: o.first })))); } catch (e) { g.final = null; g.error2 = e.message; } }));
+    await Promise.all(ok.map(async (g) => { try { g.final = await limit(ask(post, g.prov, keys[g.prov.id], messages2(brief, g.first, ok.filter((o) => o !== g).map((o) => ({ letter: o.letter, a: o.first })))), budget[1]); } catch (e) { g.final = null; g.error2 = e.message; } }));
   }
   for (const g of ok) if (!g.final) g.final = g.first;
   return { agents, cons: consensus(ok.map((g) => g.final)), rounds, at: Date.now() };
