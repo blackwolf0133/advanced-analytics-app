@@ -30,7 +30,7 @@ try:
         b = p.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox"])
         pg = b.new_context(viewport={"width": 390, "height": 800}, device_scale_factor=2, has_touch=True).new_page()
         pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("console", lambda m: errs.append(m.text) if m.type == "error" and "404" not in m.text else None)
-        pg.add_init_script(MOCK); pg.goto("http://127.0.0.1:8813/index.html"); pg.click('#nav [data-v="football"]')
+        pg.add_init_script(MOCK); pg.goto("http://127.0.0.1:8813/index.html"); pg.click('#nav [data-v="football"]'); assert pg.locator("#f-today").count() == 1; pg.click('[data-mode="league"]')
         pg.click("#f-dl"); pg.wait_for_function("document.querySelector('#toast').textContent.includes('İndirilemedi')", timeout=15000)      # Süper Lig taklitte yok: hata mesaji
         pg.select_option("#f-div", "SP1"); pg.click("#f-dl"); pg.wait_for_selector("#f-tabs", timeout=20000)
         assert "1028 maç · 4 sezon" in pg.inner_text("#main"), pg.inner_text("#main")[:200]

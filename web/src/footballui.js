@@ -4,6 +4,7 @@ import * as S from './fbsources.js';
 import { read, write } from './store.js';
 import { $, esc, pct, num } from './ui.js';
 import { httpGet } from './net.js';
+import { viewToday, stop as stopToday } from './todayui.js';
 
 const st = { div: S.byKey(read('fb_sel', 'T1')).key, tab: 'week', db: null, ms: [], M: null, ev: null, evFor: null, busy: false, report: null, home: null, away: null, toast: null };
 const trTime = (ms) => new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(ms));
@@ -17,10 +18,14 @@ function reload() {
   st.M = st.ms.length >= MIN ? F.model(st.ms) : null;
   if (st.evFor !== st.div + st.ms.length) { st.ev = null; st.evFor = null; }
 }
+const seg = (mode) => `<div class="row seg" id="f-mode">${[['today', 'Günün maçları'], ['league', 'Lig analizi']].map(([k, v]) => `<button data-mode="${k}" class="grow ${mode === k ? 'primary' : ''}">${v}</button>`).join('')}</div>`;
+function bindMode() { $('#f-mode').onclick = (e) => { const b = e.target.closest('[data-mode]'); if (b) { write('fb_mode', b.dataset.mode); viewFootball(); } }; }
 export function viewFootball(toast) {
-  st.toast = toast || st.toast; reload();
+  st.toast = toast || st.toast;
+  if (read('fb_mode', 'today') === 'today') { $('#main').innerHTML = seg('today') + '<div id="f-today"></div>'; bindMode(); viewToday(st.toast, $('#f-today')); return; }
+  stopToday(); reload();
   const n = st.ms.length, ys = Object.keys(st.db.seasons).map(Number).sort();
-  $('#main').innerHTML = `
+  $('#main').innerHTML = seg('league') + `
   <div class="card"><h2>Lig <span class="tag">${n ? `${n} maç · ${cat().src === 'milli' ? ys[0] + '–' + ys[ys.length - 1] : ys.length + ' sezon'}` : 'veri yok'}</span></h2>
     <select id="f-div" style="width:100%;margin-bottom:10px">${S.groups().map(([g, cs]) => `<optgroup label="${esc(g)}">${cs.map((c) => `<option value="${c.key}" ${c.key === st.div ? 'selected' : ''}>${esc(c.name)}${F.loadLeague(c.key).fetched ? ' ✓' : ''}</option>`).join('')}</optgroup>`).join('')}</select>
     <button id="f-dl" class="primary" style="width:100%" ${st.busy ? 'disabled' : ''}>${st.busy ? 'İndiriliyor…' : n ? 'Verileri güncelle' : 'Verileri indir'}</button>
@@ -32,6 +37,7 @@ export function viewFootball(toast) {
   ${st.M ? `<div class="row" id="f-tabs" style="margin-bottom:12px">${[['week', 'Yaklaşan maçlar'], ['match', 'Maç analizi'], ['eval', 'Karne'], ['table', cat().src === 'milli' ? 'Güç sırası' : 'Puan durumu']].map(([k, v]) => `<button data-t="${k}" class="grow ${st.tab === k ? 'primary' : ''}" style="padding:8px 4px;min-height:40px;font-size:13px">${v}</button>`).join('')}</div><div id="f-body"></div>`
     : n ? '' : `<div class="card"><h2>Nasıl çalışır</h2><ol class="steps"><li>Ligi seçip “Verileri indir”e dokunun: son 4 sezonun sonuçları ve haftanın fikstürü iner.</li><li>İki model çalışır: gol modeli (Poisson / Dixon-Coles) ve Elo. Olasılık ikisinin ortalamasıdır.</li><li>“Karne” modelin geçmişte ne kadar tuttuğunu ve bahis oranlarına karşı ne yaptığını gösterir.</li></ol></div>`}
   <div class="warn">Olasılıklar geçmiş maç sonuçlarından hesaplanır. Sakatlık, ceza, kadro ve motivasyon bilgisi yoktur. Bahis oranları bu bilgileri de içerdiği için genellikle modelden daha isabetlidir. Kazanç garantisi yoktur.</div>`;
+  bindMode();
   $('#f-div').onchange = (e) => { st.div = S.byKey(e.target.value).key; write('fb_sel', st.div); st.report = null; st.home = st.away = null; viewFootball(); };
   $('#f-dl').onclick = async () => {
     st.busy = true; viewFootball(); const div = st.div;

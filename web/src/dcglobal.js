@@ -57,14 +57,15 @@ function summary(mat) {
   let p1 = 0, px = 0, p2 = 0, o25 = 0, o15 = 0, btts = 0; const cells = [];
   mat.forEach((row, x) => row.forEach((v, y) => { if (x > y) p1 += v; else if (x === y) px += v; else p2 += v; if (x + y > 2) o25 += v; if (x + y > 1) o15 += v; if (x > 0 && y > 0) btts += v; cells.push([x, y, v]); }));
   const s = p1 + px + p2; cells.sort((a, b) => b[2] - a[2]);
-  return { p: [p1 / s, px / s, p2 / s], o25: o25 / s, o15: o15 / s, btts: btts / s, top: cells.slice(0, 3).map(([x, y, v]) => [x, y, v / s]) };
+  const by = [0, 1, 2].map((o) => { const c = cells.find(([x, y]) => (x > y ? 0 : x === y ? 1 : 2) === o); return c ? [c[0], c[1], c[2] / s] : null; });   // her sonuc icin en olasi skor
+  return { p: [p1 / s, px / s, p2 / s], o25: o25 / s, o15: o15 / s, btts: btts / s, top: cells.slice(0, 3).map(([x, y, v]) => [x, y, v / s]), by };
 }
 /** Mac tahmini: tam mac (Dixon-Coles), ilk yari ve ikinci yari (ayri Poisson). */
 export function predictMatch(l, m, rho, f = 0.45, max = 8) {
   const ph = pois(l, max), pa = pois(m, max), ft = ph.map((a, x) => pa.map((b, y) => a * b * tau(x, y, l, m, rho)));
   const half = (s) => { const qh = pois(l * s, max), qa = pois(m * s, max); return qh.map((a) => qa.map((b) => a * b)); };
   const F = summary(ft), H1 = summary(half(f)), H2 = summary(half(1 - f));
-  return { xg: [l, m], ...F, ht: H1.p, htTop: H1.top, h2: H2.p, h2Top: H2.top, f };
+  return { xg: [l, m], ...F, ht: H1.p, htTop: H1.top, htBy: H1.by, h2: H2.p, h2Top: H2.top, f };
 }
 /** Bir mac icin gol beklentileri (bilinmeyen takim: yarisma ortalamasi). */
 export function rates(model, c, h, a, neutral = 0) {

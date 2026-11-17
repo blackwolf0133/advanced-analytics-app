@@ -81,6 +81,7 @@ izni ister, izin verip kurun. Yeni sürümler aynı imzayla üretilir, eskisinin
 
 ## Veri kaynakları
 
-- **Futbol:** [football-data.co.uk](https://www.football-data.co.uk/) (42 lig, son 4 sezon, oranlar), [open-matchday](https://github.com/oladeeayo/open-matchday) (diğer ligler ve kupalar, her gün güncellenir), [martj42/international_results](https://github.com/martj42/international_results) (milli maçlar, CC0).
+- **Futbol (günün maçları, canlı skor):** ESPN herkese açık skor tabloları (220 lig ve kupa, devre skorları gol dakikalarından); tahminler `tools/futbol.mjs` ile her gün kurulan küresel gol modelinden (`web/src/dcglobal.js`).
+- **Futbol (lig analizi):** [football-data.co.uk](https://www.football-data.co.uk/) (42 lig, son 4 sezon, oranlar), [open-matchday](https://github.com/oladeeayo/open-matchday) (diğer ligler ve kupalar, her gün güncellenir), [martj42/international_results](https://github.com/martj42/international_results) (milli maçlar, CC0).
 - **Basketbol:** ESPN (NBA, WNBA, G League, NCAA, NBL), EuroLeague resmi API'si (EuroLeague, EuroCup), Türkiye Basketbol Federasyonu (BSL, TBL, KBSL, TKBL).
 - Basketbol ve milli maç verisi `tools/veri.mjs` ile her gün GitHub Actions'ta toplanır ve `veri` dalına yazılır; uygulama yalnızca bu küçük dosyaları indirir. Ücretsizdir, sunucu gerektirmez.

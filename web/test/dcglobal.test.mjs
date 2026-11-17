@@ -29,3 +29,7 @@ test('tahmin: olasiliklar toplami 1; ilk yari daha az gollu; skor tahmini en ola
   assert.ok(p.top[0][2] >= p.top[1][2] && p.htTop[0][0] + p.htTop[0][1] <= 1 && Math.abs(p.xg[0] - 1.8) < 1e-9);
   const { ms } = world(9), f = halfShare(ms); console.log('  ilk yari payi (genel)', f.get('*').toFixed(3)); assert.ok(Math.abs(f.get('*') - 0.45) < 0.03 && f.has('ligA'));
 });
+test('her sonuc icin en olasi skor: ev kazaninca ev onde, beraberlikte esit', () => {
+  const p = predictMatch(1.5, 1.1, -0.05, 0.44);
+  assert.ok(p.by[0][0] > p.by[0][1] && p.by[1][0] === p.by[1][1] && p.by[2][0] < p.by[2][1] && p.by.every((c) => c[2] <= p.top[0][2]));
+});

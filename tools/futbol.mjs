@@ -84,7 +84,7 @@ export async function futbol({ get, pool, readJson, writeJson, NOW, milliGames, 
     const r = rates(model, e.lg, e.hid, e.aid, e.n); if (r.nh < 2 || r.na < 2) return null;     // takimlardan biri icin yeterli mac yok
     return pack(predictMatch(r.l, r.m, model.rho, f), r.nh, r.na);
   };
-  const pack = (p, nh, na) => ({ p: p.p.map(r3), ht: p.ht.map(r3), h2: p.h2.map(r3), sc: p.top.map(([x, y, v]) => [x, y, r3(v)]), hsc: p.htTop.map(([x, y, v]) => [x, y, r3(v)]),
+  const pack = (p, nh, na) => ({ p: p.p.map(r3), ht: p.ht.map(r3), h2: p.h2.map(r3), sc: p.top.map(([x, y, v]) => [x, y, r3(v)]), hsc: p.htTop.map(([x, y, v]) => [x, y, r3(v)]), scb: p.by.map(([x, y, v]) => [x, y, r3(v)]),
     o25: r3(p.o25), btts: r3(p.btts), xg: p.xg.map((x) => Math.round(x * 100) / 100), nh: Math.round(nh), na: Math.round(na) });
 
   // 4) gun penceresi: mac oncesi tahmin kaydedilir; baslamis/bitmis maclarda kayitli tahmin kullanilir (yoksa geriye donuk: o gunden onceki veriyle)
