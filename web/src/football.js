@@ -43,7 +43,8 @@ export function ukToUtc(date, time) {
 }
 export const loadLeague = (div) => read('fb_' + div, { seasons: {}, fetched: 0 });
 export const loadFixtures = () => read('fb_fix', { list: [], fetched: 0 });
-export const matches = (db) => Object.keys(db.seasons).map(Number).sort((a, b) => a - b).flatMap((y) => db.seasons[y].map((m) => [...m, y]));
+// mac: [tarih, ev, dep, evGol, depGol, o1, oX, o2, sezon, tarafsiz(0/1), agirlik]
+export const matches = (db) => Object.keys(db.seasons).map(Number).sort((a, b) => a - b).flatMap((y) => db.seasons[y].map((m) => [...m.slice(0, 8), y, m[8] || 0, m[9] ?? 1]));
 export async function download(get, div, seasons = 4, now = new Date()) {
   const db = loadLeague(div), cur = currentSeason(now), report = [];
   for (let y = cur - seasons + 1; y <= cur; y++) {
@@ -66,33 +67,33 @@ const tau = (h, a, l, m, r) => (h === 0 && a === 0 ? 1 - l * m * r : h === 0 && 
  * Yeni maclar daha agir sayilir. Az maci olan takimlar lig ortalamasina dogru cekilir. Sonra dusuk skor duzeltmesi (rho) bulunur.
  */
 export function fit(ms, ref) {
-  ref = ref || ms[ms.length - 1][0];
-  const w = ms.map((m) => Math.exp(-XI * Math.max(0, days(m[0], ref)))), teams = [...new Set(ms.flatMap((m) => [m[1], m[2]]))], ix = new Map(teams.map((t, i) => [t, i])), n = teams.length;
+  ref = ref || ms[ms.length - 1][0]; let gamma = 1.3;
+  const w = ms.map((m) => Math.exp(-XI * Math.max(0, days(m[0], ref))) * (m[10] ?? 1)), G = (i) => (ms[i][9] ? 1 : gamma), teams = [...new Set(ms.flatMap((m) => [m[1], m[2]]))], ix = new Map(teams.map((t, i) => [t, i])), n = teams.length;
   const H = ms.map((m) => ix.get(m[1])), A = ms.map((m) => ix.get(m[2]));
   let sw = 0, sg = 0; ms.forEach((m, i) => { sw += w[i]; sg += w[i] * (m[3] + m[4]); });
-  const mean = sg / (2 * sw); let gamma = 1.3; const att = new Float64Array(n).fill(1), def = new Float64Array(n).fill(mean);
+  const mean = sg / (2 * sw); const att = new Float64Array(n).fill(1), def = new Float64Array(n).fill(mean);
   for (let it = 0; it < 80; it++) {
     const an = new Float64Array(n).fill(SHRINK * mean), ad = new Float64Array(n).fill(SHRINK * mean);
-    ms.forEach((m, i) => { an[H[i]] += w[i] * m[3]; ad[H[i]] += w[i] * gamma * def[A[i]]; an[A[i]] += w[i] * m[4]; ad[A[i]] += w[i] * def[H[i]]; });
+    ms.forEach((m, i) => { an[H[i]] += w[i] * m[3]; ad[H[i]] += w[i] * G(i) * def[A[i]]; an[A[i]] += w[i] * m[4]; ad[A[i]] += w[i] * def[H[i]]; });
     let s = 0; for (let t = 0; t < n; t++) { att[t] = an[t] / ad[t]; s += att[t]; } s /= n; for (let t = 0; t < n; t++) att[t] /= s;
     const dn = new Float64Array(n).fill(SHRINK * mean), dd = new Float64Array(n).fill(SHRINK);
-    ms.forEach((m, i) => { dn[H[i]] += w[i] * m[4]; dd[H[i]] += w[i] * att[A[i]]; dn[A[i]] += w[i] * m[3]; dd[A[i]] += w[i] * gamma * att[H[i]]; });
+    ms.forEach((m, i) => { dn[H[i]] += w[i] * m[4]; dd[H[i]] += w[i] * att[A[i]]; dn[A[i]] += w[i] * m[3]; dd[A[i]] += w[i] * G(i) * att[H[i]]; });
     for (let t = 0; t < n; t++) def[t] = dn[t] / dd[t];
-    let gn = 0, gd = 0; ms.forEach((m, i) => { gn += w[i] * m[3]; gd += w[i] * att[H[i]] * def[A[i]]; }); gamma = gn / gd;
+    let gn = 0, gd = 0; ms.forEach((m, i) => { if (m[9]) return; gn += w[i] * m[3]; gd += w[i] * att[H[i]] * def[A[i]]; }); if (gd > 0) gamma = gn / gd;
   }
   let rho = 0, best = -Infinity;
   for (let r = -0.2; r <= 0.2001; r += 0.01) {
     let ll = 0, ok = true;
-    for (let i = 0; i < ms.length && ok; i++) { const m = ms[i]; if (m[3] > 1 || m[4] > 1) continue; const t = tau(m[3], m[4], gamma * att[H[i]] * def[A[i]], att[A[i]] * def[H[i]], r); if (t <= 0) ok = false; else ll += w[i] * Math.log(t); }
+    for (let i = 0; i < ms.length && ok; i++) { const m = ms[i]; if (m[3] > 1 || m[4] > 1) continue; const t = tau(m[3], m[4], G(i) * att[H[i]] * def[A[i]], att[A[i]] * def[H[i]], r); if (t <= 0) ok = false; else ll += w[i] * Math.log(t); }
     if (ok && ll > best) { best = ll; rho = r; }
   }
   return { teams, ix, att, def, gamma, rho: Math.round(rho * 100) / 100, mean };
 }
 const pois = (l, k) => { let p = Math.exp(-l); for (let i = 1; i <= k; i++) p *= l / i; return p; };
 /** Skor olasiliklari tablosundan 1X2, alt/ust, KG ve en olasi skorlar. Takim modelde yoksa lig ortalamasi kullanilir. */
-export function predict(f, home, away, max = 10) {
+export function predict(f, home, away, max = 10, neutral = 0) {
   const h = f.ix.get(home), a = f.ix.get(away), ah = h === undefined ? 1 : f.att[h], dh = h === undefined ? f.mean : f.def[h], aa = a === undefined ? 1 : f.att[a], da = a === undefined ? f.mean : f.def[a];
-  const l = f.gamma * ah * da, m = aa * dh; let pH = 0, pD = 0, pA = 0, over = 0, btts = 0, sum = 0; const scores = [];
+  const l = (neutral ? 1 : f.gamma) * ah * da, m = aa * dh; let pH = 0, pD = 0, pA = 0, over = 0, btts = 0, sum = 0; const scores = [];
   for (let i = 0; i <= max; i++) for (let j = 0; j <= max; j++) {
     const p = Math.max(0, pois(l, i) * pois(m, j) * tau(i, j, l, m, f.rho)); sum += p;
     if (i > j) pH += p; else if (i === j) pD += p; else pA += p;
@@ -110,9 +111,9 @@ export function eloRun(ms) {
   for (const m of ms) {
     if (first === null) first = m[8];
     for (const t of [m[1], m[2]]) if (!seen.has(t)) { seen.add(t); elo.set(t, m[8] === first ? 1500 : 1420); }   // sonradan gelen (alt ligden cikan) takim dusuk baslar
-    const eh = elo.get(m[1]), ea = elo.get(m[2]), d = eh - ea + HF, e = 1 / (1 + Math.pow(10, -d / 400)), gd = Math.abs(m[3] - m[4]);
+    const eh = elo.get(m[1]), ea = elo.get(m[2]), d = eh - ea + (m[9] ? 0 : HF), e = 1 / (1 + Math.pow(10, -d / 400)), gd = Math.abs(m[3] - m[4]);
     pre.push(d);
-    const s = m[3] > m[4] ? 1 : m[3] === m[4] ? 0.5 : 0, g = gd <= 1 ? 1 : gd === 2 ? 1.5 : (11 + gd) / 8, sh = KF * g * (s - e);
+    const s = m[3] > m[4] ? 1 : m[3] === m[4] ? 0.5 : 0, g = gd <= 1 ? 1 : gd === 2 ? 1.5 : (11 + gd) / 8, sh = KF * (m[10] ?? 1) * g * (s - e);
     elo.set(m[1], eh + sh); elo.set(m[2], ea - sh);
   }
   return { elo, pre };
@@ -133,8 +134,8 @@ export function model(ms) {
   const f = fit(ms), e = eloRun(ms), bc = fitOrdered(e.pre, ms);
   return { f, elo: e.elo, bc, n: ms.length, teams: f.teams };
 }
-export function forecast(M, home, away) {
-  const dc = predict(M.f, home, away), g = (t) => (M.elo.has(t) ? M.elo.get(t) : 1420), d = g(home) - g(away) + HF, el = eloProbs(d, M.bc[0], M.bc[1]);
+export function forecast(M, home, away, neutral = 0) {
+  const dc = predict(M.f, home, away, 10, neutral), g = (t) => (M.elo.has(t) ? M.elo.get(t) : 1420), d = g(home) - g(away) + (neutral ? 0 : HF), el = eloProbs(d, M.bc[0], M.bc[1]);
   return { ...dc, dc: dc.p, elo: el, p: avg(dc.p, el), eloHome: g(home), eloAway: g(away) };
 }
 export function wilson(k, n, z = 1.96) { if (!n) return [0, 1]; const p = k / n, d = 1 + z * z / n, c = (p + z * z / (2 * n)) / d, m = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d; return [Math.max(0, c - m), Math.min(1, c + m)]; }
@@ -149,15 +150,19 @@ function score(rows, key) {
  * kurulan modelle tahmin edilir. Piyasa (oranlardan cikan olasilik) ve "lig ortalamasi" ile karsilastirilir.
  */
 export function evaluate(ms, block = 40) {
-  const ys = [...new Set(ms.map((m) => m[8]))].sort((a, b) => a - b); if (ys.length < 2) return null;
-  let from = ys[ys.length - 1]; if (ms.filter((m) => m[8] === from).length < 150 && ys.length >= 3) from = ys[ys.length - 2];
-  const start = ms.findIndex((m) => m[8] >= from); if (start < 300 || ms.length - start < 60) return null;
+  const ys = [...new Set(ms.map((m) => m[8]))].sort((a, b) => a - b);
+  let from = ys[ys.length - 1], start;
+  if (ys.length < 2) { start = Math.max(50, Math.floor(ms.length * 0.45)); if (ms.length - start < 30) return null; }   // tek sezon: ilk yarisiyla kur, ikinci yarisini tahmin et
+  else {
+    if (ms.filter((m) => m[8] === from).length < 150 && ys.length >= 3) from = ys[ys.length - 2];
+    start = ms.findIndex((m) => m[8] >= from); if (start < 300 || ms.length - start < 60) { start = Math.max(50, Math.floor(ms.length * 0.45)); if (ms.length - start < 30) return null; from = ms[start][8]; }
+  }
   const e = eloRun(ms), rows = [];
   for (let s = start; s < ms.length; s += block) {
-    const train = ms.slice(0, s), f = fit(train), bc = fitOrdered(e.pre.slice(0, s), train), base = [0, 0, 0];
+    const train = ms.slice(0, s), f = fit(train, ms[s][0]), bc = fitOrdered(e.pre.slice(0, s), train), base = [0, 0, 0];
     for (const m of train) base[m[3] > m[4] ? 0 : m[3] === m[4] ? 1 : 2] += 1 / train.length;
-    for (let i = s; i < Math.min(ms.length, s + block); i++) { const m = ms[i], dc = predict(f, m[1], m[2]).p, el = eloProbs(e.pre[i], bc[0], bc[1]);
-      rows.push({ o: m[3] > m[4] ? 0 : m[3] === m[4] ? 1 : 2, model: avg(dc, el), dc, elo: el, base, market: implied([m[5], m[6], m[7]]), odds: [m[5], m[6], m[7]], total: m[3] + m[4], over: predict(f, m[1], m[2]).over25 }); }
+    for (let i = s; i < Math.min(ms.length, s + block); i++) { const m = ms[i], pr = predict(f, m[1], m[2], 10, m[9]), dc = pr.p, el = eloProbs(e.pre[i], bc[0], bc[1]);
+      rows.push({ o: m[3] > m[4] ? 0 : m[3] === m[4] ? 1 : 2, model: avg(dc, el), dc, elo: el, base, market: implied([m[5], m[6], m[7]]), odds: [m[5], m[6], m[7]], total: m[3] + m[4], over: pr.over25 }); }
   }
   const withOdds = rows.filter((r) => r.market), out = { n: rows.length, from, model: score(rows, 'model'), dc: score(rows, 'dc'), elo: score(rows, 'elo'), base: score(rows, 'base'),
     nOdds: withOdds.length, market: withOdds.length >= 50 ? score(withOdds, 'market') : null, modelOnOdds: withOdds.length >= 50 ? score(withOdds, 'model') : null };

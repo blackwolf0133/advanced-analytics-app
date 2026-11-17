@@ -29,7 +29,7 @@ public class MainActivity extends Activity {
     private static final int REQ_CAPTURE = 41;
     private static final int REQ_NOTIFY = 42;
     /** Uygulamanin veri indirebilecegi adresler. Baska hicbir yere baglanilmaz. */
-    private static final List<String> HOSTS = Arrays.asList("cdn.nba.com", "stats.nba.com", "www.football-data.co.uk");
+    private static final List<String> HOSTS = Arrays.asList("www.football-data.co.uk", "raw.githubusercontent.com", "cdn.jsdelivr.net");
     private static final int MAX_BODY = 12 * 1024 * 1024;
     private WebView web;
 

@@ -1,4 +1,4 @@
-// Ana uygulama (telefon). Rulet tamamen telefonda calisir; futbol ve basketbol sonraki surumlerde eklenecek.
+// Ana uygulama (telefon): rulet, futbol (60+ lig ve milli maclar), basketbol (12 lig). Hesaplar telefonda yapilir.
 import * as R from './roulette.js';
 import { loadRoulette, saveRoulette, activeSession, newSession, withActive, read } from './store.js';
 import { $, esc, pct, num, ball, Native } from './ui.js';
@@ -6,7 +6,7 @@ import { viewBasket } from './basketui.js';
 import { viewFootball } from './footballui.js';
 import { onHttp } from './net.js';
 
-const VERSION = '0.5.0';
+const VERSION = '0.6.0';
 const st = { view: 'roulette', db: null, lastPred: undefined, armed: null, cap: 'off' };
 const TITLES = { roulette: 'Rulet', football: 'Futbol', basket: 'Basketbol', settings: 'Ayarlar' };
 

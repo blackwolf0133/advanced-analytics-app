@@ -5,6 +5,7 @@
 // martj42/international_results (CC0). Onceki calismanin dosyalari okunur; yalnizca eksik/yeni gunler indirilir.
 import fs from 'node:fs';
 import path from 'node:path';
+import { tune } from '../web/src/rating.js';
 
 const OUT = process.argv[2] || 'out';
 const NOW = new Date();
@@ -54,10 +55,15 @@ function finish(meta, seasons, upcoming, extra = {}) {
     clean[y] = uniq.filter((g) => cnt.get(g[1]) >= min && cnt.get(g[2]) >= min).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
   }
   const up = upcoming.filter((u) => u[0] >= new Date(NOW.getTime() - 3 * 3600e3).toISOString() && u[0] <= addDays(NOW, AHEAD).toISOString()).sort((a, b) => (a[0] < b[0] ? -1 : 1));
-  const file = { v: V, ...meta, updated: NOW.toISOString(), seasons: clean, upcoming: up, ...extra };
+  // model ayarlari bu ligin kendi gecmisiyle secilir (ileriye donuk test, log kayip); telefon bunlari hazir kullanir
+  let params = null;
+  try { const all = Object.keys(clean).sort().flatMap((y) => clean[y]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)); const t = tune(all);
+    params = { o: { half: t.o.half, lam: t.o.lam, prevW: t.o.prevW }, sigma: Math.round(t.sigma * 100) / 100, ll: t.sc ? Math.round(t.sc.logloss * 1e4) / 1e4 : null, acc: t.sc ? Math.round(t.sc.acc * 1e3) / 1e3 : null, n: t.sc?.n || 0 }; }
+  catch (e) { console.warn(meta.id, 'ayar secilemedi', e.message); }
+  const file = { v: V, ...meta, updated: NOW.toISOString(), seasons: clean, upcoming: up, params, ...extra };
   writeJson(`b/${meta.id}.json`, file);
   const n = Object.values(clean).reduce((s, l) => s + l.length, 0);
-  console.log(`${meta.id}: ${n} mac (${Object.entries(clean).map(([y, l]) => y + ':' + l.length).join(' ')}), ${up.length} yaklasan`);
+  console.log(`${meta.id}: ${n} mac (${Object.entries(clean).map(([y, l]) => y + ':' + l.length).join(' ')}), ${up.length} yaklasan, ayar ${JSON.stringify(params)}`);
   return { id: meta.id, name: meta.name, country: meta.country, sport: 'basket', n, seasons: Object.keys(clean).map(Number), upcoming: up.length,
     last: Object.values(clean).flat().reduce((m, g) => (g[0] > m ? g[0] : m), '') };
 }

@@ -78,3 +78,9 @@ izni ister, izin verip kurun. Yeni sürümler aynı imzayla üretilir, eskisinin
 - `web/test` — `node --test test/*.test.mjs` (8 test) ve `python3 test/e2e.py` (telefon boyutunda uçtan uca deneme).
 - `web/build.mjs` — paketleri `app/src/main/assets/www` klasörüne üretir (`node build.mjs`). Üretilmiş dosyalar depoda durur.
 - `app/src/main/java/com/aad/mobile` — `MainActivity` (ana pencere), `CaptureService` (ekran kaydı + yüzen pencere), `Store` (veri).
+
+## Veri kaynakları
+
+- **Futbol:** [football-data.co.uk](https://www.football-data.co.uk/) (42 lig, son 4 sezon, oranlar), [open-matchday](https://github.com/oladeeayo/open-matchday) (diğer ligler ve kupalar, her gün güncellenir), [martj42/international_results](https://github.com/martj42/international_results) (milli maçlar, CC0).
+- **Basketbol:** ESPN (NBA, WNBA, G League, NCAA, NBL), EuroLeague resmi API'si (EuroLeague, EuroCup), Türkiye Basketbol Federasyonu (BSL, TBL, KBSL, TKBL).
+- Basketbol ve milli maç verisi `tools/veri.mjs` ile her gün GitHub Actions'ta toplanır ve `veri` dalına yazılır; uygulama yalnızca bu küçük dosyaları indirir. Ücretsizdir, sunucu gerektirmez.

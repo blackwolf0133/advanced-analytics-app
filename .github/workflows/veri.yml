@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [tools/veri.mjs, .github/workflows/veri.yml]
+    paths: [tools/veri.mjs, web/src/rating.js, .github/workflows/veri.yml]
 permissions:
   contents: write
 concurrency:

@@ -38,7 +38,8 @@ test('karne: ileriye donuk testte lig ortalamasindan iyi, piyasadan (gercek olas
   assert.ok(e.model.logloss < e.base.logloss - 0.01 && e.market.logloss <= e.model.logloss + 0.002 && e.model.rps < e.base.rps && e.n === 306);
   const hi = e.buckets[3]; assert.ok(e.buckets.reduce((a, b) => a + b.n, 0) <= e.n && (hi.n < 15 || hi.rate > 0.6));
   assert.ok(e.buckets.filter((b) => b.bets > 60).every((b) => b.roi < 0.12));                // %5 marjli oranlara karsi buyuk kar cikmamali
-  assert.strictEqual(F.evaluate(L.ms.filter((m) => m[8] === 2025)), null);
+  const one = F.evaluate(L.ms.filter((m) => m[8] === 2025));                                // tek sezon: ilk %45 ile kurulur, kalan 169 mac tahmin edilir
+  assert.ok(one && one.n === 169 && one.model.logloss < one.base.logloss + 0.05);
 });
 test('indirme: sezonlar, kayitli sezon yeniden indirilmez, fikstur', async () => {
   const L = league([2023, 2024, 2025, 2026]), csv = (y, n) => 'Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,AvgH,AvgD,AvgA\n' + L.ms.filter((m) => m[8] === y).slice(0, n).map((m) => { const [yy, mm, dd] = m[0].split('-'); return `T1,${dd}/${mm}/${yy},${m[1]},${m[2]},${m[3]},${m[4]},${m[5]},${m[6]},${m[7]}`; }).join('\n');
