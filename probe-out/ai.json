@@ -1,0 +1,176 @@
+{
+ "brief": "Maç: India (ev sahibi) – Pakistan (deplasman) · SAFF Championship · 17 Kasım 17:00 (Türkiye saati)\nİstatistik modeli (bu sezonun bütün maç skorlarından): 1 %39, X %24, 2 %37; beklenen gol 1.60–1.56; ilk yarı 1 %31, X %38, 2 %30; skor tahmini 2-1, ilk yarı 0-0; 2,5 üst %61, karşılıklı gol %63.\nIndia son maçları (yeniden eskiye; skor kendi golü-yediği): 11.15 New Zealand (deplasmanda) 0-3 M; 11.14 Bhutan (evde) 2-1 G; 11.12 New Zealand (deplasmanda) 0-5 M; 11.11 Maldives (evde) 1-0 G; 11.05 Pakistan (deplasmanda) 3-2 G; 10.06 Uruguay (evde) 1-6 M\nPakistan son maçları: 11.14 Bangladesh (deplasmanda) 1-0 G; 11.08 Maldives (deplasmanda) 3-0 G; 11.05 India (evde) 2-3 M; 06.10 Afghanistan (evde) 2-0 G; 06.07 Afghanistan (deplasmanda) 2-0 G; 06.04 Maldives (deplasmanda) 3-0 G\nAralarındaki son maçlar: 2026-11-05 Pakistan 2-3 India",
+ "res": {
+  "agents": [
+   {
+    "letter": "A",
+    "prov": {
+     "id": "ovh-gpt",
+     "name": "gpt-oss-120b",
+     "host": "OVHcloud",
+     "url": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions",
+     "model": "gpt-oss-120b",
+     "key": false,
+     "extra": {
+      "reasoning_effort": "low"
+     }
+    },
+    "first": {
+     "p1": 39,
+     "px": 24,
+     "p2": 37,
+     "iy_skor": "2-1",
+     "ms_skor": "2-1",
+     "ust25": 61,
+     "kg": 63,
+     "guven": "orta",
+     "gerekce": "Modelin %39 ev sahibi galibiyeti ve 2-1 tahmini en yüksek olasılığa sahip. Son karşılaşmada da India 3-2 kazanmış, formda. Ancak iki takım arasında denge ve yüksek gol ihtimali var."
+    },
+    "final": {
+     "p1": 39,
+     "px": 24,
+     "p2": 37,
+     "iy_skor": "0-0",
+     "ms_skor": "2-1",
+     "ust25": 61,
+     "kg": 63,
+     "guven": "orta",
+     "gerekce": "Modelin ev sahibi galibiyeti %39, diğer analistlerin %40-40 arasında. Son karşılaşma ve yüksek gol yoğunluğu 2,5 üst ve KG destekli; ancak iki takımın formu dalgalı, bu yüzden güven orta."
+    },
+    "error": null
+   },
+   {
+    "letter": "B",
+    "prov": {
+     "id": "ovh-qwen",
+     "name": "Qwen 3.5 (397B)",
+     "host": "OVHcloud",
+     "url": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions",
+     "model": "Qwen3.5-397B-A17B",
+     "key": false,
+     "tokens": 6000
+    },
+    "first": {
+     "p1": 40,
+     "px": 25,
+     "p2": 35,
+     "iy_skor": "0-0",
+     "ms_skor": "2-1",
+     "ust25": 62,
+     "kg": 64,
+     "guven": "orta",
+     "gerekce": "Model verileri ev sahibi lehine yakın dururken Pakistan'ın güçlü formu dengeleri zorluyor. Aralarındaki son maçta her iki takım da gol buldu ve oyun yüksek tempolu geçti. Ev avantajı sayesinde India'nın minimal farkla kazanabileceği gol dolu bir karşılaşma öngörülüyor."
+    },
+    "final": {
+     "p1": 40,
+     "px": 25,
+     "p2": 35,
+     "iy_skor": "0-0",
+     "ms_skor": "2-1",
+     "ust25": 62,
+     "kg": 64,
+     "guven": "orta",
+     "gerekce": "Model verileri ev sahibi lehine yakın dururken Pakistan'ın güçlü formu dengeleri zorluyor. Aralarındaki son maçta her iki takım da gol buldu ve oyun yüksek tempolu geçti. Ev avantajı sayesinde India'nın minimal farkla kazanabileceği gol dolu bir karşılaşma öngörülüyor."
+    },
+    "error": null,
+    "error2": "The operation was aborted due to timeout"
+   },
+   {
+    "letter": "C",
+    "prov": {
+     "id": "ovh-ds",
+     "name": "DeepSeek V4.1 Flash",
+     "host": "OVHcloud",
+     "url": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions",
+     "model": "DeepSeek-V4.1-Flash-1017",
+     "key": false
+    },
+    "first": {
+     "p1": 40,
+     "px": 25,
+     "p2": 35,
+     "iy_skor": "0-0",
+     "ms_skor": "2-1",
+     "ust25": 61,
+     "kg": 63,
+     "guven": "düşük",
+     "gerekce": "Model ev sahibi lehine hafif üstünlük veriyor; son maçlarda Pakistan formda, India dalgalı. Aralarındaki son maç 3-2 India ve karşılıklı gol eğilimi yüksek. Olasılıklar birbirine yakın olduğu için güven düşük."
+    },
+    "final": {
+     "p1": 39,
+     "px": 24,
+     "p2": 37,
+     "iy_skor": "0-0",
+     "ms_skor": "2-1",
+     "ust25": 61,
+     "kg": 63,
+     "guven": "düşük",
+     "gerekce": "A ve D'nin model olasılıklarına yaklaşması ikna edici; Pakistan'ın güçlü formu nedeniyle p2'yi 37'ye çektim. B'nin p2=35 değeri formu yeterince yansıtmıyor; yine de ev avantajı ve son 3-2 India galibiyeti farkı küçük tutuyor. İlk yarı 0-0 ve 2-1 skor tahminini koruyorum."
+    },
+    "error": null
+   },
+   {
+    "letter": "D",
+    "prov": {
+     "id": "kilo",
+     "name": "Kilo ücretsiz model",
+     "host": "Kilo",
+     "url": "https://api.kilo.ai/api/gateway/chat/completions",
+     "model": "kilo-auto/free",
+     "key": false,
+     "fallback": [
+      "nvidia/nemotron-3.5-lightning:free",
+      "dots-studio/dots-3-note-preview:free"
+     ]
+    },
+    "first": {
+     "p1": 39,
+     "px": 24,
+     "p2": 37,
+     "iy_skor": "0-0",
+     "ms_skor": "2-1",
+     "ust25": 61,
+     "kg": 63,
+     "guven": "orta",
+     "gerekce": "Model ev sahibi Índia'ya hafif avantaj veriyor, ancak deplasman galibiyeti yakın bir ikinci. Son maçlardaki gol yoğunluğu 2,5 üst ve karşılıklı golü destekliyor. İlk yarı beraberlik ihtimali yüksek, muhtemel skor 2-1."
+    },
+    "final": {
+     "p1": 40,
+     "px": 25,
+     "p2": 35,
+     "iy_skor": "0-0",
+     "ms_skor": "2-1",
+     "ust25": 61,
+     "kg": 63,
+     "guven": "orta",
+     "gerekce": "Diğer analistlerle modelde görülen ev sahibi avantajı ve 2-1 skor tahmini konusunda ortaklık görüyorum. Pakistan'ın son formu dikkat çekici ancak India'nın karşı maçta 3-2 kazanması ve xG üstünlüğü dikkate alınırsa minimal ev sahibi favoriliği doğru görünüyor. Olasılıklar birbirine çok yakın olduğu nedeniyle güven seviyesi orta kalır."
+    },
+    "error": null
+   }
+  ],
+  "cons": {
+   "p": [
+    0.395,
+    0.245,
+    0.36
+   ],
+   "pick": 0,
+   "agree": 4,
+   "n": 4,
+   "ms": {
+    "score": "2-1",
+    "votes": 4,
+    "of": 4
+   },
+   "iy": {
+    "score": "0-0",
+    "votes": 4,
+    "of": 4
+   },
+   "ust25": 61.25,
+   "kg": 63.25
+  },
+  "rounds": 2,
+  "at": 1794929938636
+ }
+}
