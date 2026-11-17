@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [tools/veri.mjs, tools/futbol.mjs, web/src/rating.js, web/src/dcglobal.js, .github/workflows/veri.yml]
+    paths: [tools/**, web/src/rating.js, web/src/dcglobal.js, web/src/espn.js, web/src/football.js, .github/workflows/veri.yml]
 permissions:
   contents: write
 concurrency:
