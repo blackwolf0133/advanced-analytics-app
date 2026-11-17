@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { tune } from '../web/src/rating.js';
+import { futbol } from './futbol.mjs';
 
 const OUT = process.argv[2] || 'out';
 const NOW = new Date();
@@ -261,5 +262,6 @@ for (const l of FIBA_LEAGUES) { try { const r = await fibaLeague(l); if (r) inde
 const feat = await get(`${TBF}League/get-featured-9-leagues`);
 for (const l of TBF_LEAGUES) { try { const r = await tbfLeague(l, feat?.data || []); if (r) index.basket.push(r); } catch (e) { console.warn(l.id, e); } }
 try { index.milli = await intl(); } catch (e) { console.warn('milli', e); }
+try { const mg = readJson('milli.json', null); index.futbol = await futbol({ get, pool, readJson, writeJson, NOW, milliGames: mg?.games || [], alias: (n) => ALIAS[n] || n }); } catch (e) { console.warn('futbol', e); }
 writeJson('index.json', index);
 console.log(`bitti: ${requests} istek, ${failures} basarisiz`);

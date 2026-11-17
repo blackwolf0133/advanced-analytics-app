@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [tools/veri.mjs, web/src/rating.js, .github/workflows/veri.yml]
+    paths: [tools/veri.mjs, tools/futbol.mjs, web/src/rating.js, web/src/dcglobal.js, .github/workflows/veri.yml]
 permissions:
   contents: write
 concurrency:
@@ -15,7 +15,7 @@ concurrency:
 jobs:
   veri:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
