@@ -179,7 +179,7 @@ async function fibaLeague(l) {
     const list = [];
     for (const g of fibaGames(html)) {
       const h = g.teamA.shortName || g.teamA.officialName, a = g.teamB.shortName || g.teamB.officialName, utc = g.gameDateTimeUTC || g.gameDateTime;
-      if (!h || !a || !utc || g.statusCode && g.statusCode !== 'VALID') continue;
+      if (!h || !a || !utc || /CANC|DEL|VOID/i.test(g.statusCode || '')) continue;      // VALID: oynandi, INIT: oynanacak
       const neutral = l.neutralRounds.includes(String(g.round?.roundCode || '').toUpperCase()) ? 1 : 0, hs = Number(g.teamAScore), as = Number(g.teamBScore);
       if (!g.isLive && hs + as > 0) list.push([String(utc).slice(0, 10), h, a, hs, as, Number(y), neutral]);
       else if (!g.isPostponed && !g.isLive) upcoming.push([new Date(String(utc).replace(/Z?$/, 'Z')).toISOString(), h, a, neutral]);
