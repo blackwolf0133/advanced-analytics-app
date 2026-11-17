@@ -10,7 +10,7 @@ import { tune } from '../web/src/rating.js';
 const OUT = process.argv[2] || 'out';
 const NOW = new Date();
 const UA = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36';
-const AHEAD = 10;                                   // kac gun ilerideki fikstur yazilir
+const AHEAD = 21;                                   // kac gun ilerideki fikstur yazilir (milli mac aralarinda kupalar 2-3 hafta durur)
 const ymd = (d) => d.toISOString().slice(0, 10);
 const addDays = (d, n) => new Date(d.getTime() + n * 864e5);
 const today = ymd(NOW);

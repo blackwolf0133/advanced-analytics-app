@@ -86,7 +86,7 @@ function tabGames() {
   const horizon = up.length ? Math.max(up[0].t + 36 * 3600e3, now + 48 * 3600e3) : 0, all = up.filter((g) => g.t <= horizon);
   const list = all.filter((g) => { const p = B.predict(st.model, g.home, g.away, g.neutral).pHome; return Math.max(p, 1 - p) >= st.min; });
   $('#b-body').innerHTML = chips() + (list.length ? `<p class="muted" style="margin:0 4px 10px">Sıradaki ${all.length} maçın ${list.length} tanesi bu eşiğin üstünde.</p>` + list.map((g) => card(g.home, g.away, trTime(g.utc), g.neutral)).join('')
-    : `<div class="card"><p class="muted">${all.length ? `Sıradaki ${all.length} maçın hiçbiri bu eşiğin üstünde değil. Daha düşük bir eşik seçin.` : 'Önümüzdeki 10 gün içinde listelenen maç yok (lig arası ya da sezon bitmiş olabilir). “Verileri güncelle”ye dokunun ya da “Analiz” sekmesinden takımları kendiniz seçin.'}</p></div>`);
+    : `<div class="card"><p class="muted">${all.length ? `Sıradaki ${all.length} maçın hiçbiri bu eşiğin üstünde değil. Daha düşük bir eşik seçin.` : 'Önümüzdeki 3 hafta içinde listelenen maç yok (lig arası ya da sezon bitmiş olabilir). “Verileri güncelle”ye dokunun ya da “Analiz” sekmesinden takımları kendiniz seçin.'}</p></div>`);
   bindChips(tabGames);
 }
 function tabResults() {
