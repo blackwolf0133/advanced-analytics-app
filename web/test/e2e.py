@@ -30,6 +30,8 @@ try:
         assert pg.locator(".hist .ball.star").count() == 2 and "Son tahmin tuttu" in pg.inner_text(".pred")
         assert pg.locator(".zone").count() == 3 and pg.locator(".zone .ball").count() == 15
         pg.click("#undo"); assert pg.locator(".hist .ball.star").count() == 1
+        assert pg.locator(".trow").count() == 2 and "şansla beklenen" in pg.inner_text(".trow >> nth=0"), pg.inner_text("#main")
+        pg.select_option("#tpay", "29"); pg.wait_for_timeout(200); assert json.loads(pg.evaluate("localStorage.getItem('aad.trial')"))["pay"] == 29
         pg.screenshot(path="/tmp/phone_roulette.png", full_page=False)
         for v in ("football", "basket", "settings", "roulette"): pg.click(f'#nav [data-v="{v}"]')
         pg.click("#new")                                            # ekran okuma icin bos oturum

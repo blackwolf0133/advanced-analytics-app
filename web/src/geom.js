@@ -288,3 +288,31 @@ export function frameCells(img, newest = 'first', mask = null, scale = img.w / 1
   }
   return best && { cells: best.cells, rows: best.rows, cols: best.cols, strip: best.strip, py: best.py || 0, xs: best.xs || null };
 }
+
+/* ---------- ekran kaymasi: tarayici tam ekran olunca / adres cubugu gizlenince tablo yer degistirir ---------- */
+/** Kucultulmus ekran seridinin satir profilleri: ortalama parlaklik (panel kenarlari) ve yayilim (yazilar). */
+export function screenProfile(img) {
+  const m = new Float32Array(img.h), sd = new Float32Array(img.h);
+  for (let y = 0; y < img.h; y++) {
+    let s = 0, s2 = 0;
+    for (let x = 0; x < img.w; x++) { const i = (y * img.w + x) * 3, v = (img.d[i] + img.d[i + 1] + img.d[i + 2]) / 3; s += v; s2 += v * v; }
+    const a = s / img.w; m[y] = a; sd[y] = Math.sqrt(Math.max(0, s2 / img.w - a * a));
+  }
+  return { m: Array.from(m, Math.round), sd: Array.from(sd, Math.round) };
+}
+const ncc = (a, b, dy, lo, hi) => {             // a[i] ile b[i+dy], i in [lo,hi)
+  let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0;
+  for (let i = Math.max(lo, -dy); i < Math.min(hi, b.length - dy); i++) { const x = a[i], y = b[i + dy]; n++; sa += x; sb += y; saa += x * x; sbb += y * y; sab += x * y; }
+  if (n < 0.4 * (hi - lo)) return -1;
+  const va = saa - sa * sa / n, vb = sbb - sb * sb / n; return va > 1e-6 && vb > 1e-6 ? (sab - sa * sb / n) / Math.sqrt(va * vb) : -1;
+};
+/**
+ * Onceki profile gore dikey kayma (profil satiri biriminde). [lo,hi) karsilastirilacak bolge (or. tablo ve ustundeki baslik).
+ * Donus { dy, corr, corr0 }: corr en iyi kaymadaki benzerlik, corr0 kaymasiz benzerlik.
+ */
+export function findShift(ref, cur, max, lo = 0, hi = ref.m.length) {
+  const sc = (dy) => (ncc(ref.m, cur.m, dy, lo, hi) + ncc(ref.sd, cur.sd, dy, lo, hi)) / 2;
+  let best = { dy: 0, corr: sc(0) }; const corr0 = best.corr;
+  for (let dy = -max; dy <= max; dy++) { if (!dy) continue; const v = sc(dy); if (v > best.corr) best = { dy, corr: v }; }
+  return { ...best, corr0 };
+}

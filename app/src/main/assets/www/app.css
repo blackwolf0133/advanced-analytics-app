@@ -64,3 +64,5 @@ table.t { width: 100%; border-collapse: collapse; font-size: 13px; } table.t th 
 .aiout:empty { display: none; } .aiout { margin-top: 8px; }
 .aicard { border: 1px solid #34465c; border-radius: 12px; padding: 10px; background: #121a25; } .aicard h3 { margin: 0 0 6px; font-size: 14px; color: #cfe0ff; }
 .aiag { border-top: 1px solid var(--line); padding: 8px 0 0; margin-top: 8px; font-size: 13px; } .aiag b { color: var(--text); } .aiag .muted { font-size: 12.5px; }
+.trow{margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08);line-height:1.5}
+.trow .miss,b.miss{color:#ff6b6b}

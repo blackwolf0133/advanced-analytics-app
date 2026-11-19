@@ -24,7 +24,7 @@ try:
         sp = [x["v"] for x in json.loads(ov.evaluate("localStorage.getItem('aad.roulette')"))["sessions"][0]["spins"]]; assert sp == WANT[::-1], sp
         assert ov.evaluate("getComputedStyle(document.querySelector('#peek')).display") != "none"; ov.screenshot(path="/tmp/tap_mini.png")
         ov.evaluate(SHIFT, 34)                                      # adres cubugu acildi: sayfa 34 piksel asagi kaydi
-        ov.wait_for_function("document.querySelector('#status').textContent.includes('yeniden bulundu')", timeout=30000)
+        ov.wait_for_function("/yeniden bulundu|kaydı/.test(document.querySelector('#status').textContent)", timeout=30000)
         cfg2 = json.loads(ov.evaluate("localStorage.getItem('aad.screen')")); print("kayma sonrasi:", cfg["t"], "->", cfg2["t"]); assert abs(cfg2["t"] - cfg["t"] - 34) <= 8, cfg2
         ov.wait_for_function("document.querySelector('#status').textContent.includes('Okunuyor') || document.querySelector('#status').textContent.includes('başladı')", timeout=30000)
         sp2 = [x["v"] for x in json.loads(ov.evaluate("localStorage.getItem('aad.roulette')"))["sessions"][0]["spins"]]; assert sp2 == sp, sp2   # kayma yeni sayi uretmemeli

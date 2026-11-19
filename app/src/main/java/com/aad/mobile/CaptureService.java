@@ -341,6 +341,22 @@ public class CaptureService extends Service {
             return pack(crop(left, top, w, h), w, h);
         }
 
+        /** Kucultulmus bolge (her 'step'inci piksel): ekranin kayip kaymadigini ucuzca anlamak icin. Bicim grabRaw ile ayni. */
+        @JavascriptInterface
+        public String grabSmall(int left, int top, int w, int h, int step) {
+            if (step < 1) step = 1;
+            byte[] px = crop(left, top, w, h);
+            if (px == null) return "";
+            int ow = w / step, oh = h / step;
+            byte[] out = new byte[ow * oh * 4];
+            for (int y = 0; y < oh; y++) {
+                for (int x = 0; x < ow; x++) {
+                    System.arraycopy(px, ((y * step) * w + x * step) * 4, out, (y * ow + x) * 4, 4);
+                }
+            }
+            return pack(out, ow, oh);
+        }
+
         /**
          * Bolge secimi icin ekran goruntusu: yuzen pencere kisa sure gizlenir, kare dondurulur ve JPEG olarak verilir
          * ("genislik,yukseklik,data:image/jpeg;base64,..."). Dondurulan kare grabFrozen ile okunur.

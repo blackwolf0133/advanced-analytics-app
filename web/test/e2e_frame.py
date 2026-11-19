@@ -8,6 +8,8 @@ WIN = "window.__win = [252, 1500, 498, 672]; window.__moves = []; window.Native.
 ROW1 = [29, 4, 27, 21, 13, 14, 1, 8]   # 34 (100x rozetli) okunamayabilir
 SHIFT = """(dy) => { const c = window.__f, g = c.getContext('2d'), t = document.createElement('canvas'); t.width = c.width; t.height = c.height; t.getContext('2d').drawImage(c, 0, 0);
   g.fillStyle = '#1b1b1b'; g.fillRect(0, 0, c.width, c.height); g.drawImage(t, 0, 0, c.width, 700, 0, 0, c.width, 700); g.drawImage(t, 0, 700, c.width, 1500 - dy, 0, 700 + dy, c.width, 1500 - dy); }"""
+MOVE = """(dy) => { const c = window.__f, t = document.createElement('canvas'); t.width = c.width; t.height = c.height; t.getContext('2d').drawImage(c, 0, 0);
+  const g = c.getContext('2d'); g.fillStyle = '#101010'; g.fillRect(0, 0, c.width, c.height); g.drawImage(t, 0, dy); }"""
 srv = subprocess.Popen([sys.executable, "-m", "http.server", "8818", "--bind", "127.0.0.1"], cwd=WWW, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); time.sleep(1); errs = []
 spins = lambda ov: [x["v"] for x in json.loads(ov.evaluate("localStorage.getItem('aad.roulette')"))["sessions"][0]["spins"]]
 try:
@@ -26,6 +28,18 @@ try:
         ov.evaluate(SHIFT, 84); ov.wait_for_function("document.querySelector('#status').textContent.includes('aranıyor')", timeout=20000); print("durum:", ov.inner_text("#status"))
         ov.wait_for_function("document.querySelector('#status').textContent.includes('başladı')", timeout=60000); print("durum:", ov.inner_text("#status"))
         ov.wait_for_timeout(3000); assert len(spins(ov)) == n0, spins(ov)[::-1][:10]
+        # tarayici tam ekran: sayfa 250 px yukari kayar (ust tablo satiri eski cercevenin disina cikar) -> okuma yeri de kayar
+        t0 = json.loads(ov.evaluate("localStorage.getItem('aad.screen')"))["t"]; n0 = len(spins(ov)); ov.evaluate(MOVE, -250)
+        ov.wait_for_function(f"JSON.parse(localStorage.getItem('aad.screen')).t !== {t0}", timeout=20000); print("durum:", ov.inner_text("#status"))
+        t1 = json.loads(ov.evaluate("localStorage.getItem('aad.screen')"))["t"]; print("cerceve:", t0, "->", t1); assert abs(t1 - (t0 - 250)) <= 8, (t0, t1)
+        ov.wait_for_function("document.querySelector('#status').textContent.startsWith('Okunuyor: 29 4 27')", timeout=60000); print("durum:", ov.inner_text("#status"))
+        ov.wait_for_timeout(3000); assert len(spins(ov)) == n0, spins(ov)[::-1][:10]
+        # okuma yeri tablo olmayan bir yere kaydedilmisse ekranin tamaminda aranir
+        ov.click("#run"); ov.evaluate("localStorage.setItem('aad.screen', JSON.stringify({ ...JSON.parse(localStorage.getItem('aad.screen')), t: 1950, h: 400 }))"); ov.reload(); ov.evaluate(H.LOAD, base64.b64encode(FIX.read_bytes()).decode()); ov.evaluate(MOVE, -250)
+        ov.click("#run"); ov.wait_for_function("document.querySelector('#status').textContent.includes('başka yerde')", timeout=90000); print("durum:", ov.inner_text("#status"))
+        ov.wait_for_function("document.querySelector('#status').textContent.startsWith('Okunuyor: 29 4 27')", timeout=60000); print("durum:", ov.inner_text("#status"), json.loads(ov.evaluate("localStorage.getItem('aad.screen')")))
+        assert len(spins(ov)) == n0
+        ov.evaluate(MOVE, 250)
         ov.evaluate("document.querySelector('#region').click()"); ov.wait_for_function("document.querySelector('#hint').textContent.includes('Tablo bulundu')", timeout=30000)
         print("bolge:", ov.inner_text("#hint")[:70]); assert "(29)" in ov.inner_text("#hint"); ov.screenshot(path="/tmp/frame_pick.png")
         b.close()

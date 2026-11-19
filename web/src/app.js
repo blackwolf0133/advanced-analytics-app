@@ -1,13 +1,13 @@
 // Ana uygulama (telefon): rulet, futbol (60+ lig ve milli maclar), basketbol (12 lig). Hesaplar telefonda yapilir.
 import * as R from './roulette.js';
-import { loadRoulette, saveRoulette, activeSession, newSession, withActive, read } from './store.js';
+import { loadRoulette, saveRoulette, activeSession, newSession, withActive, read, write } from './store.js';
 import { $, esc, pct, num, ball, Native } from './ui.js';
 import { viewBasket } from './basketui.js';
 import { viewFootball } from './footballui.js';
 import * as AI from './aiui.js';
 import { onHttp } from './net.js';
 
-const VERSION = '0.8.3';
+const VERSION = '0.8.4';
 const st = { view: 'roulette', db: null, lastPred: undefined, armed: null, cap: 'off' };
 const TITLES = { roulette: 'Rulet', football: 'Futbol', basket: 'Basketbol', settings: 'Ayarlar' };
 
@@ -57,6 +57,7 @@ function viewRoulette() {
       <div class="tile"><span>Bölge tuttu</span><b>${k.zhits}</b></div><div class="tile"><span>Şansla beklenen</span><b>${num(k.zexpected)}</b></div><div class="tile"><span>Toplam sayı</span><b>${k.total}</b></div></div>
     <p class="muted" style="margin:10px 0 0">Çarkın hafızası yoktur: hangi sayı gösterilirse gösterilsin tutma şansı ${pct(R.CHANCE)}’dir; üç bölge 15 sayı kaplar ve şansla ${pct(R.ZONE_CHANCE)} tutar. “Tutan” sayısı “Şansla beklenen”e yakınsa tahmin rastgele seçimden farklı değildir.</p>
   </div>
+  ${trialCard(s)}
   ${screenCard()}
   <div class="card"><h2>Geçmiş <span class="tag">en yeni başta</span></h2>
     <div class="hist">${s.spins.slice(-80).reverse().map((x) => ball(x.v, (x.ph ? 'star ' : '') + (x.imp ? 'imp' : ''))).join('') || '<span class="muted">Henüz sayı yok.</span>'}</div>
@@ -69,7 +70,27 @@ function viewRoulette() {
   $('#pad').onclick = (e) => { const b = e.target.closest('[data-n]'); if (!b) return; withActive((x) => R.addSpin(x, Number(b.dataset.n))); viewRoulette(); };
   $('#undo').onclick = () => { withActive((x) => R.undo(x)); viewRoulette(); };
   $('#del').onclick = (e) => confirmTap(e.target, 'Emin misiniz? Tekrar dokunun', () => { const d = loadRoulette(); d.sessions = d.sessions.filter((x) => x.id !== d.active); d.active = d.sessions[0]?.id ?? null; saveRoulette(d); st.lastPred = undefined; viewRoulette(); });
-  bindScreen();
+  bindScreen(); bindTrial();
+}
+/* ---------- deneme karnesi: oynamadan, tahminler sansa gore nasil ve oynansaydi ne olurdu ---------- */
+const TL = (v) => `${v < 0 ? '−' : v > 0 ? '+' : ''}${Math.abs(Math.round(v)).toLocaleString('tr-TR')} TL`;
+const VERDICT = { az: ['muted', 'Karar için en az 10 tahmin gerekli.'], ust: ['hit', 'Şansın belirgin üstünde (az veriyle yine de tesadüf olabilir; uzun denemede düşer mi bakın).'],
+  biraz: ['', 'Şansın biraz üstünde, ama tesadüf sınırları içinde.'], esit: ['', 'Şans düzeyinde: rastgele seçimden farkı yok.'], altbiraz: ['', 'Şansın biraz altında, tesadüf sınırları içinde.'], alt: ['miss', 'Şansın belirgin altında.'] };
+function trialCard(s) {
+  const o = read('trial', { stake: 5, pay: 35 }), t = R.trial(s, o.stake, o.pay);
+  const line = (name, x, note) => `<div class="trow"><b>${name}</b>: ${t.n} tahminde <b>${x.hit}</b> tuttu · şansla beklenen ${num(x.exp)}
+    <div class="${VERDICT[x.v][0]}">${VERDICT[x.v][1]}${x.v !== 'az' ? ` <span class="muted">(Şansla bu kadar ya da daha iyisi: %${Math.round(x.p * 100)})</span>` : ''}</div>
+    <div class="muted">Oynansaydı (${note}): yatan ${TL(x.cost).replace('+', '')}, sonuç <b class="${x.pl > 0 ? 'hit' : x.pl < 0 ? 'miss' : ''}">${TL(x.pl)}</b></div></div>`;
+  return `<div class="card"><h2>Deneme karnesi <span class="tag">oynamadan</span></h2>
+    <div class="row" style="gap:8px;align-items:center"><label class="muted">Sayı başına <input id="tstake" type="number" min="1" step="1" value="${o.stake}" style="width:70px"> TL</label>
+      <select id="tpay"><option value="35" ${o.pay === 35 ? 'selected' : ''}>Standart masa (35'e 1)</option><option value="29" ${o.pay === 29 ? 'selected' : ''}>Çarpanlı masa (29'a 1)</option></select></div>
+    ${line('Komşu bölgeleri (15 sayı)', t.zone, `her elde 15 sayıya ${o.stake} TL`)}
+    ${line('Tek tahmin sayısı', t.single, `her elde 1 sayıya ${o.stake} TL`)}
+    <p class="muted" style="margin:10px 0 0">Çarpan kazançları (100x, 300x…) hesaba katılmaz; rastgele gelir, tahmin edilemez. Uzun vadede her bahis ortalama yaklaşık %2,7 kaybettirir (çarpanlı masalarda da benzer: düşük ödeme çarpanlarla dengelenir). Bu kart eğlence içindir.</p></div>`;
+}
+function bindTrial() {
+  const save = () => { const stake = Math.max(1, Number($('#tstake').value) || 5), pay = Number($('#tpay').value) || 35; write('trial', { stake, pay }); viewRoulette(); };
+  if ($('#tstake')) { $('#tstake').onchange = save; $('#tpay').onchange = save; }
 }
 function bindHead() {
   $('#sess').onchange = (e) => { const d = loadRoulette(); d.active = Number(e.target.value); saveRoulette(d); st.lastPred = undefined; viewRoulette(); };
@@ -83,7 +104,8 @@ function screenCard() {
     ${on ? `<p class="muted" style="margin:10px 0 0">Şimdi rulet oyununa geçin. Yüzen pencerede ${cfg ? '“Başlat”a' : '“Bölge”ye'} dokunun.</p>` : `<ol class="steps">
       <li>Düğmeye dokunun. Telefon iki izin ister: “diğer uygulamaların üzerinde göster” ve “ekranı kaydet”. Ekran kaydında <b>tüm ekran</b>ı seçin.</li>
       <li>Rulet oyununa geçin. Sayıların göründüğü yer ekranda olsun: “Sonuçlar” tablosu ya da üstteki tek sıralık şerit.</li>
-      <li>Yüzen pencerede “Bölge”ye dokunun, sayıların olduğu alanı parmağınızla çerçeveleyin (şerit için “Tek sıra”ya dokunun), sarı çizgileri sayıların arasına oturtun, “Dene” ile kontrol edin.</li>
+      <li>Yüzen pencerede “Bölge”ye dokunun, geçmiş tablosunun çevresine kabaca bir çerçeve çizin (tek sıralık şerit için şeride bir kez dokunun). Satırları ve en yeni sayıyı program bulur; yeşil kutu doğruysa “Kaydet”.</li>
+      <li>Tarayıcı tam ekrana geçer ya da sayfa kayarsa program bunu fark eder ve okuma yerini kendisi kaydırır.</li>
       <li>“Başlat”a dokunun. Yeni sayılar kendiliğinden kaydedilir; tahmin yüzen pencerede görünür.</li></ol>`}
   </div>`;
 }

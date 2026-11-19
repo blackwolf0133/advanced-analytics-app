@@ -84,3 +84,25 @@ export function mergeHistory(s, hist, force = false) {
   s.spins.unshift(...pre.map(mk)); s.spins.push(...post.map(mk));
   return { old: pre.length, fresh: post.length, skipped, matched: best ? best.ok : 0 };
 }
+
+/** n denemede (her birinde basari olasiligi p) en az k basari olasiligi. */
+export function atLeast(n, k, p) {
+  if (k <= 0) return 1; if (k > n) return 0;
+  let t = Math.pow(1 - p, n), s = 0;                       // P(X=0)
+  for (let i = 0; i < k; i++) { s += t; t = t * (n - i) / (i + 1) * p / (1 - p); }
+  return Math.max(0, Math.min(1, 1 - s));
+}
+/**
+ * Deneme karnesi (oynamadan): tahminler sansla beklenene gore nasil gitti ve oynansaydi ne olurdu.
+ * stake: sayi basina bahis; pay: duz sayi odemesi (standart masa 35, carpanli masalar daha az, or. 29). Carpan kazanclari sayilmaz.
+ */
+export function trial(s, stake = 5, pay = 35) {
+  const k = stats(s), back = stake * (pay + 1);
+  const verdict = (hit, exp, pv) => (k.n < 10 ? 'az' : pv < 0.05 ? 'ust' : hit >= exp + 0.5 ? 'biraz' : hit <= exp - 0.5 && atLeast(k.n, hit + 1, exp / k.n) > 0.95 ? 'alt' : hit < exp - 0.5 ? 'altbiraz' : 'esit');
+  const zp = atLeast(k.n, k.zhits, ZONE_CHANCE), hp = atLeast(k.n, k.hits, CHANCE);
+  return {
+    n: k.n, zone: { hit: k.zhits, exp: k.zexpected, p: zp, v: verdict(k.zhits, k.zexpected, zp), pl: k.zhits * back - k.n * 15 * stake, cost: k.n * 15 * stake },
+    single: { hit: k.hits, exp: k.expected, p: hp, v: verdict(k.hits, k.expected, hp), pl: k.hits * back - k.n * stake, cost: k.n * stake },
+    edge: (37 - (pay + 1)) / 37,                            // uzun vadede bahsin ortalama kaybi
+  };
+}

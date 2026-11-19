@@ -1,7 +1,7 @@
 // Yuzen pencere: bolge secimi, ekrandan sayi okuma, takip ve tahmin gosterimi. Oyunun ustunde durur.
 import * as R from './roulette.js';
 import { fromRGBA } from './digits.js';
-import { cellRects, newestRects, readRects, alignStrip, fitStrip, fitGrid, frameCells } from './geom.js';
+import { cellRects, newestRects, readRects, alignStrip, fitStrip, fitGrid, frameCells, screenProfile, findShift, blackout } from './geom.js';
 import { sub } from './digits.js';
 import { Tracker, TRACK } from './tracker.js';
 import { loadRoulette, activeSession, withActive, read, write } from './store.js';
@@ -116,11 +116,56 @@ function scrolledAway(c, g, grab) {
   const b = bbox(rects), img = decode(grab(c.l + b.x0, c.t + b.y0, b.x1 - b.x0, b.y1 - b.y0)); if (!img) return false;
   const v = readRects(img, { rects, x0: b.x0, y0: b.y0 }); return v.filter((x) => x !== null).length >= 0.5 * rects.length;
 }
+/* ---------------- ekran kaymasi (tam ekran, adres cubugu) ---------------- */
+const SMALL = 4;
+function smallColumn(c) {
+  if (Native.grabSmall) return decode(Native.grabSmall(c.l, 0, c.w, c.sh, SMALL));
+  const big = decode(Native.grabRaw(c.l, 0, c.w, c.sh)); if (!big) return null;            // eski uygulama: JS'de kucult
+  const W = Math.floor(big.w / SMALL), H = Math.floor(big.h / SMALL), d = new Uint8Array(W * H * 3);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = ((y * SMALL) * big.w + x * SMALL) * 3, o = (y * W + x) * 3; d[o] = big.d[i]; d[o + 1] = big.d[i + 1]; d[o + 2] = big.d[i + 2]; }
+  return { w: W, h: H, d };
+}
+/**
+ * Tarayici tam ekrana gecince ya da adres cubugu gizlenince sayfa yukari/asagi kayar; secilen yer bos kalir ve program hep
+ * ayni sayiyi gosterir. Ekranin kucuk bir kopyasi ara ara oncekiyle karsilastirilir; kayma bulunursa okuma yeri de kaydirilir.
+ */
+function checkShift(c) {
+  if (Date.now() - (st.shiftAt || 0) < 2000) return false;
+  st.shiftAt = Date.now();
+  let img = smallColumn(c); if (!img || dark(img)) return false;
+  if (Native.winRect) { const w = String(Native.winRect() || '').split(',').map(Number); st.win = w[2] > 0 ? w : null; }
+  if (st.win) img = blackout(img, [{ x0: (st.win[0] - c.l) / SMALL, y0: st.win[1] / SMALL, x1: (st.win[0] + st.win[2] - c.l) / SMALL, y1: (st.win[1] + st.win[3]) / SMALL }]);
+  const prof = screenProfile(img);
+  if (!st.ref) { st.ref = prof; return false; }
+  const k = c.sw / 1080, lo = Math.max(0, Math.floor((c.t - 200 * k) / SMALL)), hi = Math.min(prof.m.length, Math.ceil((c.t + c.h) / SMALL));
+  const r = findShift(st.ref, prof, Math.floor(c.sh * 0.3 / SMALL), lo, hi), dy = r.dy * SMALL;
+  if (Math.abs(dy) >= 12 * k && r.corr >= 0.6 && r.corr - r.corr0 >= 0.15) {
+    const t = Math.max(0, Math.min(c.sh - c.h, c.t + dy));
+    st.cfg = { ...c, t }; write('screen', st.cfg); st.ref = prof;
+    st.grid = null; st.tracker = null; st.first = null; st.bad = 0; st.fixAt = 0;
+    say(`Ekran ${dy < 0 ? 'yukarı' : 'aşağı'} kaydı (tam ekran / adres çubuğu); okuma yeri de kaydırıldı.`);
+    return true;
+  }
+  if (!r.dy && r.corr0 >= 0.8) st.ref = prof;            // ekran yerinde: karsilastirma ornegi tazelenir
+  return false;
+}
+
 /** Okuma duzeni: sabit hucreler (tek sira / elle tablo) ya da cerceve. */
 function layout(c, grab) {
   if (c.kind !== 'frame') {
     const all = c.rows * c.cols, box = (k) => { const b = newestRects(c, k); return { x0: c.l + b.x0, y0: c.t + b.y0, x1: c.l + b.x1, y1: c.t + b.y1 }; };
-    return { n: Math.min(TRACK, all), all, box, read: (k) => readNewest(c, k, grab), refit: () => refit(c), badMax: 6, single: c.rows === 1 };
+    return { n: Math.min(TRACK, all), all, box, read: (k) => readNewest(c, k, grab), refit: () => { const ok = refit(c); if (ok) st.ref = null; return ok; }, badMax: 6, single: c.rows === 1 };
+  }
+  if (!st.grid && st.wide) {                                  // ekranin tamami (ayni sutunlar): tablo bulunursa cerceve oraya tasinir
+    st.wide = false;
+    if (Native.winRect) { const w = String(Native.winRect() || '').split(',').map(Number); st.win = w[2] > 0 ? w : null; }
+    const full = { ...c, t: 0, h: c.sh }, img = decode(grab(full.l, 0, full.w, full.h));
+    const g = img && !dark(img) ? frameCells(img, c.newest, winMask(full), c.sw / 1080) : null;
+    if (g) {
+      const b = bbox(g.cells), pad = Math.round(30 * c.sw / 1080), t = Math.max(0, b.y0 - pad), bot = Math.min(c.sh, b.y1 + pad);
+      st.cfg = { ...c, t, h: bot - t }; write('screen', st.cfg); st.ref = null;
+      say('Tablo başka yerde bulundu; okuma yeri oraya taşındı.'); return null;
+    }
   }
   if (!st.grid) {
     if (Date.now() < (st.retryAt || 0)) return null;
@@ -131,8 +176,11 @@ function layout(c, grab) {
     if (!img) { say('Ekran görüntüsü alınamadı.'); return null; }
     if (dark(img)) { say(BLACK); return null; }
     const g = frameCells(img, c.newest, winMask(c), c.sw / 1080);
-    if (!g) { st.retryAt = Date.now() + 2500; say('Çerçevede sayı tablosu bulunamadı. Oyunda geçmiş tablosunu açın; olmazsa “Bölge” ile tablonun çevresini çizin.'); return null; }
-    st.grid = g; st.gridAt = Date.now(); st.tracker = null; st.first = null; st.bad = 0;
+    if (!g) {
+      if (!st.wideTried) { st.wideTried = true; st.wide = true; say('Çerçevede tablo yok; ekranın tamamında aranıyor…'); return null; }
+      st.retryAt = Date.now() + 2500; say('Sayı tablosu bulunamadı. Oyunda geçmiş tablosunu açın; olmazsa “Bölge” ile tablonun çevresini çizin.'); return null;
+    }
+    st.grid = g; st.gridAt = Date.now(); st.tracker = null; st.first = null; st.bad = 0; st.wideTried = false; st.ref = null;   // karsilastirma ornegi bu yerden
   }
   const g = st.grid, all = g.cells.length;
   if (st.tracker && Date.now() - st.gridAt > 5000) {                   // ara ara: tablo kaydi mi?
@@ -164,7 +212,7 @@ function start() {
     else if (h && h.kind === 'grid') { st.cfg = { l: h.l, t: h.t, w: h.w, h: h.h, kind: 'frame', rows: h.rows, cols: h.cols, newest: h.newest, sw: h.sw, sh: h.sh }; write('screen', st.cfg); }
     else { openPicker(); return; }
   }
-  st.running = true; st.tracker = null; st.first = null; st.saved = 0; st.imported = 0; st.bad = 0; st.fixAt = 0; st.peek = null; st.grid = null; st.searching = false; st.retryAt = 0;
+  st.running = true; st.tracker = null; st.first = null; st.saved = 0; st.imported = 0; st.bad = 0; st.fixAt = 0; st.peek = null; st.grid = null; st.searching = false; st.retryAt = 0; st.ref = null; st.wide = false; st.wideTried = false;
   say('Başlatılıyor…'); render();
 }
 function tick() {
@@ -177,9 +225,10 @@ function tick() {
   const grab = (l, t, w, h) => Native.grabRaw(l, t, w, h);
   st.busy = true;
   try {
+    if (checkShift(c)) return;
     const L = layout(c, grab); if (!L) return;
     const n = L.n, cv = clearView(L.box(st.tracker ? n : Math.min(L.all, c.kind === 'frame' ? n : L.all)), c.sw, c.sh);
-    if (cv === 'moved') { st.tracker = null; st.first = null; st.bad = 0; st.moved = true; say('Pencere okunan sayıların üstündeydi; kenara çekildi. Okuma sürüyor.'); return; }
+    if (cv === 'moved') { st.tracker = null; st.first = null; st.bad = 0; st.moved = true; st.ref = null; say('Pencere okunan sayıların üstündeydi; kenara çekildi. Okuma sürüyor.'); return; }
     if (cv === 'blocked') { say('Pencere okunan sayıları kapatıyor; lütfen sürükleyip şeritten uzaklaştırın.'); return; }
     if (st.moved) { st.moved = false; st.fixAt = 0; if (c.kind !== 'frame' && L.refit()) return; }    // pencere kapatirken olculen serit duzeni yenilenir
     if (!st.tracker) {
@@ -195,7 +244,7 @@ function tick() {
         st.imported = good.length; st.tracker = new Tracker(vals.slice(0, n));
         say(`${good.length} sayı geçmiş olarak aktarıldı${vals.length - good.length ? ` (${vals.length - good.length} hücre okunamadı)` : ''}. Yeni sayılar bekleniyor.`);
       } else st.tracker = new Tracker();
-      render(); return;
+      st.freshAt = Date.now(); render(); return;
     }
     const vals = L.read(n);
     if (vals === 'black') { say(BLACK); return; }
@@ -203,8 +252,12 @@ function tick() {
     const r = st.tracker.feed(vals); peek();
     st.bad = r.state === 'unreadable' || r.state === 'mismatch' || vals[0] === null ? st.bad + 1 : 0;
     if (st.bad >= L.badMax && L.refit()) return;
+    if (Date.now() - (st.freshAt || Date.now()) > 180000) {         // 3 dakikadir yeni sayi yok: yanlis yere takilmis olabilir
+      st.freshAt = Date.now(); if (c.kind === 'frame') { st.grid = null; st.tracker = null; say('Uzun süredir yeni sayı yok; tablo yeniden kontrol ediliyor…'); return; }
+      st.fixAt = 0; if (L.refit()) return;
+    }
     if (r.fresh.length) {
-      withActive((x) => { for (const v of r.fresh) R.addSpin(x, v); });
+      st.freshAt = Date.now(); withActive((x) => { for (const v of r.fresh) R.addSpin(x, v); });
       st.saved += r.fresh.length; say(`Yeni sayı: ${r.fresh.join(', ')} · toplam ${st.saved} yeni sayı`); render();
     } else if (r.state === 'unreadable') say('Sayılar şu an okunamıyor. Pencere sayıların üstünü kapatmasın.');
     else if (r.state === 'resync') say('Sıra eşleşmedi; arada tur kaçmış olabilir. Sıra yeniden başlatıldı.');
@@ -368,7 +421,7 @@ function bindPicker() {
       if (p.kind === 'frame' && !p.cells) { $('#hint').textContent = 'Önce tablonun çevresini çizin; tablo bulunduktan sonra “Kaydet”.'; return; }
       st.cfg = p.kind === 'frame' ? { ...p.rect, kind: 'frame', rows: p.rows, cols: p.cols, newest: p.newest, sw: p.iw, sh: p.ih }
         : { ...p.rect, rows: p.rows, cols: p.cols, first: p.rows === 1 ? p.first : 1, newest: p.newest, sw: p.iw, sh: p.ih, ...(p.rows > 1 ? { kind: 'manual' } : {}) };
-      write('screen', st.cfg); st.grid = null;
+      write('screen', st.cfg); st.grid = null; st.ref = null;
       closePicker(); st.running = false; say('Bölge kaydedildi. “Başlat”a dokunun.'); render(); return;
     }
     if (act !== 'test') p.results = null;
