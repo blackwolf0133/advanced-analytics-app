@@ -108,13 +108,22 @@ function frameRead(c, g, k, grab) {
   return vals;
 }
 const readRegion = (img, x0, y0, x1, y1) => sub(img, Math.max(0, x0), Math.max(0, y0), Math.min(img.w, x1), Math.min(img.h, y1));
-/** Tablo kaydiysa (ustte yeni satir gorunuyorsa) en yeni satir artik bu degildir: duzen yeniden aranir. */
-function scrolledAway(c, g, grab) {
-  if (g.strip || !g.py || !g.xs || c.newest !== 'first') return false;
-  const y1 = g.cells[0].y0, y0 = y1 - g.py; if (y0 < 0) return false;
-  const rects = g.xs.map(([x0, x1]) => ({ x0, x1, y0, y1 })).filter((r) => !hiddenCell(c, r)); if (rects.length < 2) return false;
-  const b = bbox(rects), img = decode(grab(c.l + b.x0, c.t + b.y0, b.x1 - b.x0, b.y1 - b.y0)); if (!img) return false;
-  const v = readRects(img, { rects, x0: b.x0, y0: b.y0 }); return v.filter((x) => x !== null).length >= 0.5 * rects.length;
+/**
+ * Cercevenin ustunde (ekranda, cerceve disinda) hala sayi satirlari var mi? Tarayici tam ekrana gecince sayfa yukari kayar ve
+ * cerceve tablonun ortasina denk gelir: o zaman 'ilk satir' aslinda 3. satirdir. Donus: cercevenin yukari uzatilacagi piksel (0 = gerek yok).
+ */
+function rowsAbove(c, g, grab) {
+  if (g.strip || !g.py || !g.xs || c.newest !== 'first') return 0;
+  const first = g.cells[0].y0, K = 4; let top = null;
+  const y0 = first - K * g.py, lo = Math.max(y0, -c.t); if (first - lo < g.py * 0.6) return 0;
+  const rects = []; for (let k = 1; k <= K; k++) { const b = first - (k - 1) * g.py, a = b - g.py; if (a < -c.t) break; rects.push(g.xs.map(([x0, x1]) => ({ x0, x1, y0: a, y1: b }))); }
+  if (!rects.length) return 0;
+  const all = rects.flat(), bb = bbox(all), img = decode(grab(c.l + bb.x0, c.t + bb.y0, bb.x1 - bb.x0, bb.y1 - bb.y0)); if (!img || dark(img)) return 0;
+  rects.forEach((row, k) => {
+    const vis = row.filter((r) => !hiddenCell(c, r)); if (vis.length < 2) return;
+    const v = readRects(img, { rects: vis, x0: bb.x0, y0: bb.y0 }); if (v.filter((x) => x !== null).length >= 0.5 * vis.length && (top === null || k === top + 1)) top = k;
+  });
+  return top === null ? 0 : first - rects[top][0].y0;
 }
 /* ---------------- ekran kaymasi (tam ekran, adres cubugu) ---------------- */
 const SMALL = 4;
@@ -180,12 +189,17 @@ function layout(c, grab) {
       if (!st.wideTried) { st.wideTried = true; st.wide = true; say('Çerçevede tablo yok; ekranın tamamında aranıyor…'); return null; }
       st.retryAt = Date.now() + 2500; say('Sayı tablosu bulunamadı. Oyunda geçmiş tablosunu açın; olmazsa “Bölge” ile tablonun çevresini çizin.'); return null;
     }
-    st.grid = g; st.gridAt = Date.now(); st.tracker = null; st.first = null; st.bad = 0; st.wideTried = false; st.ref = null;   // karsilastirma ornegi bu yerden
+    st.grid = g; st.gridAt = 0; st.gridOk = false; st.tracker = null; st.first = null; st.bad = 0; st.wideTried = false; st.ref = null;   // karsilastirma ornegi bu yerden
   }
   const g = st.grid, all = g.cells.length;
-  if (st.tracker && Date.now() - st.gridAt > 5000) {                   // ara ara: tablo kaydi mi?
-    st.gridAt = Date.now();
-    if (scrolledAway(c, g, grab)) { st.grid = null; st.tracker = null; say('Tablo kaymış; en yeni sayı yeniden aranıyor…'); return null; }
+  if (!st.gridOk || Date.now() - st.gridAt > 4000) {                   // bulunur bulunmaz, sonra ara ara: ustte baska satir var mi?
+    st.gridAt = Date.now(); st.gridOk = true;
+    const up = rowsAbove(c, g, grab);
+    if (up > 0) {
+      const t = Math.max(0, c.t - up - Math.round(6 * c.sw / 1080)); st.cfg = { ...c, t, h: c.h + (c.t - t) }; write('screen', st.cfg);
+      st.grid = null; st.gridOk = false; st.tracker = null; st.first = null; st.bad = 0; st.ref = null;
+      say('Tablonun üst satırları çerçevenin dışında kalmış (tam ekran / kayma); çerçeve yukarı genişletildi.'); return null;
+    }
   }
   const box = (k) => { const b = bbox(g.cells.slice(0, k)); return { x0: c.l + b.x0, y0: c.t + b.y0, x1: c.l + b.x1, y1: c.t + b.y1 }; };
   const refitF = () => { if (Date.now() - st.fixAt < 3000) return false; st.fixAt = Date.now(); st.grid = null; st.tracker = null; st.first = null; st.bad = 0; say('Sayılar okunamıyor; tablo yeniden aranıyor…'); return true; };
