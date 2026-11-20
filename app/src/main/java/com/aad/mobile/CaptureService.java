@@ -74,6 +74,8 @@ public class CaptureService extends Service {
     private WindowManager.LayoutParams params;
     private LinearLayout root;
     private TextView handle;
+    /** WebView icinde bu y'nin (piksel) altindaki dokunuslar surukleme baslatmaz (dugmeler); -1: her yer. */
+    private volatile float dragLimit = -1;
     private WebView web;
     private String mode = "mini";
     private int miniX, miniY;
@@ -241,7 +243,7 @@ public class CaptureService extends Service {
         root.setOrientation(LinearLayout.VERTICAL);
 
         handle = new TextView(this);
-        handle.setText("≡  Tahmin  ·  buradan sürükle");
+        handle.setText("≡  Tahmin  ·  istediğin yerinden sürükle");
         handle.setTextColor(0xFF8C9AAB);
         handle.setTextSize(11);
         handle.setGravity(Gravity.CENTER);
@@ -280,6 +282,54 @@ public class CaptureService extends Service {
                     windows.updateViewLayout(root, params);
                 }
                 return true;
+            }
+        });
+
+        // pencerenin her yerinden surukleme (alttaki dugme satiri haric); kisa dokunus WebView'a gider
+        web.setOnTouchListener(new View.OnTouchListener() {
+            private int startX, startY;
+            private float touchX, touchY;
+            private boolean armed, dragging;
+            private final int slop = android.view.ViewConfiguration.get(CaptureService.this).getScaledTouchSlop();
+
+            @Override
+            public boolean onTouch(View v, MotionEvent e) {
+                if ("full".equals(mode)) return false;
+                switch (e.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        armed = dragLimit < 0 || e.getY() < dragLimit;
+                        dragging = false;
+                        startX = params.x;
+                        startY = params.y;
+                        touchX = e.getRawX();
+                        touchY = e.getRawY();
+                        return false;
+                    case MotionEvent.ACTION_MOVE:
+                        if (!armed) return false;
+                        float dx = e.getRawX() - touchX, dy = e.getRawY() - touchY;
+                        if (!dragging && Math.abs(dx) + Math.abs(dy) > slop) {
+                            dragging = true;
+                            MotionEvent c = MotionEvent.obtain(e);
+                            c.setAction(MotionEvent.ACTION_CANCEL);
+                            web.onTouchEvent(c);
+                            c.recycle();
+                        }
+                        if (dragging) {
+                            params.x = startX + Math.round(dx);
+                            params.y = startY + Math.round(dy);
+                            windows.updateViewLayout(root, params);
+                            return true;
+                        }
+                        return false;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        boolean was = dragging;
+                        dragging = false;
+                        armed = false;
+                        return was;
+                    default:
+                        return dragging;
+                }
             }
         });
 
@@ -436,6 +486,11 @@ public class CaptureService extends Service {
                 miniY = params.y;
                 windows.updateViewLayout(root, params);
             });
+        }
+
+        @JavascriptInterface
+        public void setDragLimit(float cssY) {
+            dragLimit = cssY < 0 ? -1 : cssY * getResources().getDisplayMetrics().density;
         }
 
         @JavascriptInterface

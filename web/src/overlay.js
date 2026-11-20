@@ -449,6 +449,13 @@ $('#hist').onclick = () => openPicker(true);
 $('#run').onclick = () => (st.running ? stop('Okuma durduruldu.') : start());
 $('#close').onclick = () => Native.stopCapture();
 $('#top').onclick = () => setMode(st.mode === 'ball' ? 'mini' : 'ball');
+// pencere her yerinden suruklenir, alttaki dugme satiri haric: dugmelerin ust kenari Java'ya bildirilir
+let dragY = null;
+setInterval(() => {
+  if (!Native.setDragLimit) return;
+  const b = $('#btns'), y = b && b.offsetParent ? Math.round(b.getBoundingClientRect().top) : -1;
+  if (y !== dragY) { dragY = y; Native.setDragLimit(y); }
+}, 500);
 bindPicker();
 window.AADO = { onScreen: () => { if (st.mode === 'full') closePicker(); } };
 say(st.cfg ? '“Başlat”a dokunun. Pencereyi üst çubuğundan sürükleyebilirsiniz.' : 'Oyunu açın, sonra “Bölge”ye dokunup sayıların olduğu tabloyu seçin.');
