@@ -145,12 +145,12 @@ export async function futbol({ get, pool, readJson, writeJson, NOW, milliGames, 
         if (m.day < cut || m.day >= cut + 7) continue;
         const r = rates(Mw, m.c, m.h, m.a, m.n); if (r.nh < 4 || r.na < 4) continue;
         const pr = predictMatch(r.l, r.m, Mw.rho, shareW.get(m.c) ?? shareW.get('*'));
-        items.push({ sport: 'f', id: m.id, t: String(m.day), lg: m.c, wk: w, day: Math.floor(m.day + 0.125), nh: r.nh, na: r.na, hg: m.hg, ag: m.ag, pr: { p: pr.p, o25: pr.o25, btts: pr.btts } });
+        items.push({ sport: 'f', id: m.id, t: String(m.day), lg: m.c, wk: w, day: Math.floor(m.day + 0.125), nh: r.nh, na: r.na, hg: m.hg, ag: m.ag, h1: m.h1, a1: m.a1, pr: { p: pr.p, o25: pr.o25, btts: pr.btts, xg: pr.xg, f: shareW.get(m.c) ?? shareW.get('*') } });
       }
     }
-    const fitCal = (list) => Object.fromEntries(Object.entries(FMK).map(([k, f]) => [k, isotonic(list.map((m) => [f.raw(m.pr), f.hit(m.hg, m.ag) ? 1 : 0]))]));
+    const fitCal = (list) => Object.fromEntries(Object.entries(FMK).map(([k, f]) => [k, isotonic(list.map((m) => [f.raw(m.pr), f.hit(m.hg, m.ag, m.h1, m.a1)]).filter(([, y]) => y != null).map(([p, y]) => [p, y ? 1 : 0]))]));
     const strong = items.filter((m) => m.nh >= 8 && m.na >= 8);
-    kb = { cal: fitCal(items), bt: couponTest(strong, fitCal, footLegs, (m) => [m.hg, m.ag]), n: items.length, weeks: 26 };
+    kb = { cal: fitCal(items), bt: { ...couponTest(strong, fitCal, footLegs, (m) => [m.hg, m.ag, m.h1, m.a1]), ...couponTest(strong, fitCal, footLegs, (m) => [m.hg, m.ag, m.h1, m.a1], ['gol6', 'kk2'], [7, 8, 10]) }, n: items.length, weeks: 26 };
     console.log('kombine futbol:', items.length, 'mac', JSON.stringify(kb.bt));
   } catch (e) { console.warn('kombine', e); }
   const lgOut = {}; for (const [slug, L] of Object.entries(db.leagues)) { const pre = slug.split('.')[0];

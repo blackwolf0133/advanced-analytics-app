@@ -21,6 +21,11 @@ export function calib(knots, p) {
 }
 
 /* ---------------- futbol pazarlari ---------------- */
+const poisLE = (l, k) => { let t = Math.exp(-l), s = 0; for (let i = 0; i <= k; i++) { s += t; t *= l / (i + 1); } return s; };
+const sc = (l) => 1 - Math.exp(-l);                     // en az bir gol
+// gol beklentisi (xg) ve ligin ilk yari gol payi (f) ile: 6+ gol, iki yarida da karsilikli gol (ham; kalibrasyonla duzeltilir)
+const g6 = (p) => (p.xg ? 1 - poisLE(p.xg[0] + p.xg[1], 5) : NaN);
+const kk2 = (p) => { if (!p.xg) return NaN; const [a, b] = p.xg, f = p.f ?? 0.443; return sc(a * f) * sc(b * f) * sc(a * (1 - f)) * sc(b * (1 - f)); };
 export const FMK = {
   '1': { label: 'MS 1', raw: (p) => p.p[0], hit: (h, a) => h > a, fav: true },
   X: { label: 'MS X', raw: (p) => p.p[1], hit: (h, a) => h === a },
@@ -31,12 +36,15 @@ export const FMK = {
   A: { label: '2,5 Alt', raw: (p) => 1 - p.o25, hit: (h, a) => h + a < 3, goal: true },
   KGV: { label: 'KG Var', raw: (p) => p.btts, hit: (h, a) => h > 0 && a > 0, goal: true },
   KGY: { label: 'KG Yok', raw: (p) => 1 - p.btts, hit: (h, a) => !(h > 0 && a > 0), goal: true },
+  G6: { label: '6+ gol', raw: g6, hit: (h, a) => h + a >= 6, goal: true, special: true },
+  KK2: { label: 'İY KG + 2Y KG', raw: kk2, hit: (h, a, h1, a1) => (h1 == null ? null : h1 > 0 && a1 > 0 && h - h1 > 0 && a - a1 > 0), goal: true, special: true, half: true },
 };
 /** Bir futbol macinin secenekleri (kalibre). m: { id, h, a, t, lg, pr } ; cal: { pazar: dugumler }. */
 export function footLegs(m, cal) {
   if (!m.pr || !m.pr.p) return [];
+  if (m.f != null && m.pr.f == null) m = { ...m, pr: { ...m.pr, f: m.f } };
   const top = m.pr.p.indexOf(Math.max(...m.pr.p));
-  return Object.entries(FMK).map(([k, d]) => ({ sport: 'f', id: m.id, t: m.t, lg: m.lg, h: m.h, a: m.a, mk: k, label: d.label, raw: d.raw(m.pr), q: calib(cal?.[k], d.raw(m.pr)), under: (k === '1' && top !== 0) || (k === '2' && top !== 2) || k === 'X' }));
+  return Object.entries(FMK).filter(([, d]) => Number.isFinite(d.raw(m.pr))).map(([k, d]) => ({ sport: 'f', id: m.id, t: m.t, lg: m.lg, h: m.h, a: m.a, mk: k, label: d.label, raw: d.raw(m.pr), q: calib(cal?.[k], d.raw(m.pr)), under: (k === '1' && top !== 0) || (k === '2' && top !== 2) || k === 'X' }));
 }
 /** Basketbol: ev sahibi kazanir olasiligi (kalibre) -> iki secenek. */
 export function basketLegs(g, cal) {
@@ -56,6 +64,9 @@ export const MODES = {
   banko: { name: 'Banko kupon', ok: (l) => l.q >= 0.72 && l.mk !== 'X', score: (l) => Math.log(l.q) },
   ms: { name: 'Banko maç sonucu', ok: (l) => (l.mk === '1' || l.mk === '2') && !l.under && l.q >= 0.62, score: (l) => Math.log(l.q) },
   surpriz: { name: 'Sürpriz kupon', ok: (l) => l.under && l.q >= 0.3 && l.q <= 0.48, score: (l) => Math.log(l.q) },
+  // gol avi listeleri (en az 7 mac): modelin en yuksek ihtimal verdigi maclar
+  gol6: { name: '6+ gol kombinesi', ok: (l) => l.mk === 'G6', score: (l) => l.q, list: true },
+  kk2: { name: 'İki yarıda karşılıklı gol', ok: (l) => l.mk === 'KK2', score: (l) => l.q, list: true },
 };
 export function coupon(legs, mode, n = 3) {
   const M = MODES[mode], best = new Map();
@@ -67,7 +78,7 @@ export function coupon(legs, mode, n = 3) {
   return { mode, legs: pick, q, odds: 1 / q };
 }
 /** Bir secim tuttu mu? r: [ev, dep] gercek skor. */
-export const legHit = (l, r) => (l.sport === 'f' ? FMK[l.mk].hit(r[0], r[1]) : l.mk === '1' ? r[0] > r[1] : r[0] < r[1]);
+export const legHit = (l, r) => (l.sport === 'f' ? FMK[l.mk].hit(r[0], r[1], r[2], r[3]) : l.mk === '1' ? r[0] > r[1] : r[0] < r[1]);
 
 /**
  * Kupon kuralinin gecmis testi. items: { wk, day, ... } ; her hafta, o hafta HARIC verilerle kalibre edilir (sizinti yok),
@@ -81,13 +92,14 @@ export function couponTest(items, fitCal, legsOf, resOf, modes = ['banko', 'ms',
       const ms = inW.filter((m) => m.day === day), by = new Map(ms.map((m) => [m.sport + m.id, m])), legs = ms.flatMap((m) => legsOf(m, cal));
       for (const mode of modes) for (const n of ns) {
         const c = coupon(legs, mode, n); if (!c) continue;
-        const o = ((out[mode] ||= {})[n] ||= { k: 0, hit: 0, q: 0, legs: 0, lhit: 0 });
-        const hits = c.legs.map((l) => legHit(l, resOf(by.get(l.sport + l.id))));
-        o.k++; o.hit += hits.every(Boolean) ? 1 : 0; o.q += c.q; o.legs += hits.length; o.lhit += hits.filter(Boolean).length;
+        const hits = c.legs.map((l) => legHit(l, resOf(by.get(l.sport + l.id)))); if (hits.some((h) => h == null)) continue;
+        const o = ((out[mode] ||= {})[n] ||= { k: 0, hit: 0, q: 0, legs: 0, lhit: 0, lq: 0, dist: Array(n + 1).fill(0) });
+        const h = hits.filter(Boolean).length;
+        o.k++; o.hit += h === n ? 1 : 0; o.q += c.q; o.legs += n; o.lhit += h; o.lq += c.legs.reduce((s2, l) => s2 + l.q, 0); o.dist[h]++;
       }
     }
   }
   const r3 = (x) => Math.round(x * 1000) / 1000;
-  for (const m of Object.values(out)) for (const [n, o] of Object.entries(m)) m[n] = { k: o.k, hit: o.hit, rate: r3(o.hit / o.k), exp: r3(o.q / o.k), leg: r3(o.lhit / o.legs) };
+  for (const m of Object.values(out)) for (const [n, o] of Object.entries(m)) m[n] = { k: o.k, hit: o.hit, rate: r3(o.hit / o.k), exp: Number((o.q / o.k).toPrecision(3)), leg: r3(o.lhit / o.legs), legExp: r3(o.lq / o.legs), dist: o.dist };
   return out;
 }

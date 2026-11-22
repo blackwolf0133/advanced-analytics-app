@@ -8,8 +8,8 @@ android {
         applicationId 'com.aad.mobile'
         minSdk 26
         targetSdk 34
-        versionCode 20
-        versionName '0.9.0'
+        versionCode 21
+        versionName '0.9.1'
     }
     // Sabit imza: her derlemede ayni anahtar kullanilir, boylece yeni surum eskisinin ustune kurulur ve veriler silinmez.
     // Bu anahtar yalnizca kisisel kurulum icindir (uygulama magazaya konmaz).

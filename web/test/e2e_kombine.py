@@ -15,7 +15,12 @@ try:
         pg.click('#k-when [data-w="72"]'); pg.wait_for_selector(".kcard", timeout=15000)
         cards = pg.locator(".kcard"); print("kupon:", cards.count())
         for i in range(cards.count()): print("---", cards.nth(i).inner_text().replace("\n", " | ")[:400])
-        assert cards.count() == 3
+        assert cards.count() == 5
+        g6 = pg.inner_text(".kcard.gol6"); assert pg.locator(".kcard.gol6 .kleg").count() == 7 and "Beklenen tutan" in g6 and "milyonda" in g6, g6
+        assert pg.locator(".kcard.kk2 .kleg").count() == 7
+        pg.click('#k-gn [data-gn="10"]'); pg.wait_for_timeout(300); assert pg.locator(".kcard.gol6 .kleg").count() == 10
+        pg.locator('.ksave[data-mode="gol6"]').click(); pg.wait_for_selector(".ksaved")
+        pg.evaluate("localStorage.setItem('aad.kb_saved', '[]')"); pg.click('#k-gn [data-gn="7"]')
         txt = pg.inner_text("#main"); assert "Geçmiş test" in txt and "Adil oran" in txt
         pg.screenshot(path="/tmp/kombine.png", full_page=True)
         leg = pg.locator(".kcard.banko .kleg").first.inner_text(); print("ilk banko secim:", leg.replace("\n", " | "))
