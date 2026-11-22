@@ -5,7 +5,9 @@
 // martj42/international_results (CC0). Onceki calismanin dosyalari okunur; yalnizca eksik/yeni gunler indirilir.
 import fs from 'node:fs';
 import path from 'node:path';
-import { tune } from '../web/src/rating.js';
+import { tune, prepare, walk, minSeenFor, phi } from '../web/src/rating.js';
+import { isotonic, basketLegs, couponTest } from '../web/src/kombine.js';
+const kbRows = [];   // basketbol kombine: ileriye donuk test tahminleri (butun ligler)
 import { futbol } from './futbol.mjs';
 
 const OUT = process.argv[2] || 'out';
@@ -59,7 +61,12 @@ function finish(meta, seasons, upcoming, extra = {}) {
   // model ayarlari bu ligin kendi gecmisiyle secilir (ileriye donuk test, log kayip); telefon bunlari hazir kullanir
   let params = null;
   try { const all = Object.keys(clean).sort().flatMap((y) => clean[y]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)); const t = tune(all);
-    params = { o: { half: t.o.half, lam: t.o.lam, prevW: t.o.prevW }, sigma: Math.round(t.sigma * 100) / 100, ll: t.sc ? Math.round(t.sc.logloss * 1e4) / 1e4 : null, acc: t.sc ? Math.round(t.sc.acc * 1e3) / 1e3 : null, n: t.sc?.n || 0 }; }
+    params = { o: { half: t.o.half, lam: t.o.lam, prevW: t.o.prevW }, sigma: Math.round(t.sigma * 100) / 100, ll: t.sc ? Math.round(t.sc.logloss * 1e4) / 1e4 : null, acc: t.sc ? Math.round(t.sc.acc * 1e3) / 1e3 : null, n: t.sc?.n || 0 };
+    if (!t.small && !/ncaa/.test(meta.id)) {          // kombine icin: test yarisindaki mac oncesi tahminler
+      const P = prepare(all), log = walk(P, t.o), ms = minSeenFor(P);
+      for (let i = Math.floor(P.n * 0.45); i < P.n; i++) { const l = log[i]; if (!l || l.seen < ms || P.M[i] === 0) continue; const g = P.games[i];
+        kbRows.push({ sport: 'b', id: meta.id + i, lg: meta.id, t: g[0], day: g[0], wk: Math.floor(Date.parse(g[0]) / 864e5 / 7), h: g[1], a: g[2], hp: g[3], ap: g[4], pHome: phi(l.pm / t.sigma) }); }
+    } }
   catch (e) { console.warn(meta.id, 'ayar secilemedi', e.message); }
   const file = { v: V, id: meta.id, name: meta.name, country: meta.country, updated: NOW.toISOString(), seasons: clean, upcoming: up, params, ...extra };
   writeJson(`b/${meta.id}.json`, file);
@@ -263,5 +270,10 @@ const feat = await get(`${TBF}League/get-featured-9-leagues`);
 for (const l of TBF_LEAGUES) { try { const r = await tbfLeague(l, feat?.data || []); if (r) index.basket.push(r); } catch (e) { console.warn(l.id, e); } }
 try { index.milli = await intl(); } catch (e) { console.warn('milli', e); }
 try { const mg = readJson('milli.json', null); index.futbol = await futbol({ get, pool, readJson, writeJson, NOW, milliGames: mg?.games || [], alias: (n) => ALIAS[n] || n }); } catch (e) { console.warn('futbol', e); }
+try {
+  const fitCal = (list) => isotonic(list.map((r) => [r.pHome, r.hp > r.ap ? 1 : 0]), 60);
+  index.kb = { cal: fitCal(kbRows), bt: couponTest(kbRows, fitCal, basketLegs, (r) => [r.hp, r.ap], ['banko', 'surpriz'], [2, 3, 4]), n: kbRows.length };
+  console.log('kombine basketbol:', kbRows.length, 'mac', JSON.stringify(index.kb.bt));
+} catch (e) { console.warn('kombine basketbol', e); }
 writeJson('index.json', index);
 console.log(`bitti: ${requests} istek, ${failures} basarisiz`);

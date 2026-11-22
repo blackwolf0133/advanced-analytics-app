@@ -4,6 +4,7 @@
 import { fitGlobal, predictMatch, rates, halfShare } from '../web/src/dcglobal.js';
 import * as F from '../web/src/football.js';
 import { parseEvents } from '../web/src/espn.js';
+import { isotonic, footLegs, couponTest, FMK } from '../web/src/kombine.js';
 export { parseEvents };
 
 const S = 'https://site.api.espn.com/apis/site/v2/sports/soccer/';
@@ -134,11 +135,29 @@ export async function futbol({ get, pool, readJson, writeJson, NOW, milliGames, 
       addT('*', s); addT(m.c, s);
     }
   }
+  // kombine: 26 haftalik ileriye donuk test -> pazar basina kalibrasyon (model olasiligi -> gercek oran) ve kupon kurallarinin gecmis basarisi
+  let kb = null;
+  try {
+    const items = [];
+    for (let w = 26; w >= 1; w--) {
+      const cut = Math.floor(nowDay) - 7 * w, Mw = fit(cut), shareW = halfShare(rows.filter((m) => m.day < cut));
+      for (const m of clubRows) {
+        if (m.day < cut || m.day >= cut + 7) continue;
+        const r = rates(Mw, m.c, m.h, m.a, m.n); if (r.nh < 4 || r.na < 4) continue;
+        const pr = predictMatch(r.l, r.m, Mw.rho, shareW.get(m.c) ?? shareW.get('*'));
+        items.push({ sport: 'f', id: m.id, t: String(m.day), lg: m.c, wk: w, day: Math.floor(m.day + 0.125), nh: r.nh, na: r.na, hg: m.hg, ag: m.ag, pr: { p: pr.p, o25: pr.o25, btts: pr.btts } });
+      }
+    }
+    const fitCal = (list) => Object.fromEntries(Object.entries(FMK).map(([k, f]) => [k, isotonic(list.map((m) => [f.raw(m.pr), f.hit(m.hg, m.ag) ? 1 : 0]))]));
+    const strong = items.filter((m) => m.nh >= 8 && m.na >= 8);
+    kb = { cal: fitCal(items), bt: couponTest(strong, fitCal, footLegs, (m) => [m.hg, m.ag]), n: items.length, weeks: 26 };
+    console.log('kombine futbol:', items.length, 'mac', JSON.stringify(kb.bt));
+  } catch (e) { console.warn('kombine', e); }
   const lgOut = {}; for (const [slug, L] of Object.entries(db.leagues)) { const pre = slug.split('.')[0];
     lgOut[slug] = { name: L.name, en: L.en, ulke: COUNTRY[pre] || 'Diğer', nat: L.nat, f: r3(share.get(slug) ?? share.get('*')), pri: PRIORITY.includes(slug) ? PRIORITY.indexOf(slug) : 99 }; }
   const sum = (o) => ({ n: o.n, hit: r3(o.hit / o.n), sc: r3(o.sc / o.n), ht: o.nht ? r3(o.ht / o.nht) : null, nht: o.nht, ll: r3(o.ll / o.n), ...(o.base != null ? { base: r3(o.base / o.n) } : {}) });
   const karne = { live: Object.fromEntries(Object.entries(stat).map(([k, o]) => [k, sum(o)])), test: Object.fromEntries(Object.entries(test).map(([k, o]) => [k, sum(o)])) };
-  writeJson('f/gun.json', { v: V, updated: NOW.toISOString(), leagues: lgOut, matches: out, karne, rho: M.rho, f: r3(share.get('*')) });
+  writeJson('f/gun.json', { v: V, updated: NOW.toISOString(), leagues: lgOut, matches: out, karne, rho: M.rho, f: r3(share.get('*')), kb });
   const np = out.filter((m) => m.pr).length;
   console.log(`futbol: ${Object.keys(db.ev).length} bitmis mac (${clubRows.length} kulup), pencere ${out.length} mac (${np} tahminli), ilk yari payi ${r3(share.get('*'))}, rho ${M.rho}, gercek ${JSON.stringify(karne.live['*'] || null)}, test ${JSON.stringify(karne.test['*'] || null)}`);
   return { n: Object.keys(db.ev).length, window: out.length, predicted: np };

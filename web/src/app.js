@@ -4,12 +4,13 @@ import { loadRoulette, saveRoulette, activeSession, newSession, withActive, read
 import { $, esc, pct, num, ball, Native } from './ui.js';
 import { viewBasket } from './basketui.js';
 import { viewFootball } from './footballui.js';
+import { viewKombine } from './kombineui.js';
 import * as AI from './aiui.js';
 import { onHttp } from './net.js';
 
-const VERSION = '0.8.6';
+const VERSION = '0.9.0';
 const st = { view: 'roulette', db: null, lastPred: undefined, armed: null, cap: 'off' };
-const TITLES = { roulette: 'Rulet', football: 'Futbol', basket: 'Basketbol', settings: 'Ayarlar' };
+const TITLES = { roulette: 'Rulet', football: 'Futbol', basket: 'Basketbol', kombine: 'Kombine', settings: 'Ayarlar' };
 
 function toast(msg, ms = 3500) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), ms); }
 /** Iki kez dokununca calisan tehlikeli islem dugmesi. */
@@ -21,7 +22,7 @@ function confirmTap(btn, label, fn) {
 function setView(v) {
   st.view = v; $('#title').textContent = TITLES[v];
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
-  ({ roulette: viewRoulette, football: () => viewFootball(toast), basket: () => viewBasket(toast), settings: viewSettings })[v]();
+  ({ roulette: viewRoulette, football: () => viewFootball(toast), basket: () => viewBasket(toast), kombine: () => viewKombine(toast), settings: viewSettings })[v]();
   $('#main').scrollTop = 0;
 }
 
