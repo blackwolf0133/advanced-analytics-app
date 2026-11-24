@@ -2,21 +2,21 @@
 // oranlardan gol beklentisi cikarma ve ESPN maclariyla eslestirme. Veri hatti ve telefon ortak kullanir.
 export const IDDAA = 'https://sportsbookv2.iddaa.com/sportsbook/events?st=1&type=0&version=0';
 export const IDDAA_COMP = 'https://sportsbookv2.iddaa.com/sportsbook/competitions';
+export const IDDAA_EVENT = (id) => `https://sportsbookv2.iddaa.com/sportsbook/event/${id}`;   // tek macin butun pazarlari (or. iki yarida KG)
 
 const MK = {   // tip_alttip -> kisa ad ; secenek adlari sirasiyla
   '1_1': ['ms', ['1', '0', '2']], '2_92': ['cs', ['1 ve 0', '1 ve 2', '0 ve 2']], '2_89': ['kg', ['Var', 'Yok']], '2_4': ['tg', ['0-1 gol', '2-3 gol', '4-5 gol', '6+ gol']],
-  '2_720': ['iykg', ['Var', 'Yok']], '2_821': ['y2kg', ['Var', 'Yok']], '2_866': ['kk2', ['Evet', 'Hayır']], '2_88': ['iy', ['1', '0', '2']],
+  '2_720': ['iykg', ['Var', 'Yok']], '2_821': ['y2kg', ['Var', 'Yok']], '2_866': ['kk2', ['Evet / Evet', 'Evet / Hayır', 'Hayır / Evet', 'Hayır / Hayır']], '2_88': ['iy', ['1', '0', '2']],
   '2_101': ['ou', ['Alt', 'Üst']], '2_60': ['iou', ['Alt', 'Üst']], '2_603': ['hou', ['Alt', 'Üst']], '2_604': ['aou', ['Alt', 'Üst']], '2_722': ['hiou', ['Alt', 'Üst']], '2_723': ['aiou', ['Alt', 'Üst']],
 };
 const LINE = new Set(['ou', 'iou', 'hou', 'aou', 'hiou', 'aiou']);
-/** Bulten olayini sade bicime cevirir: { io, d (ISO), h, a, lg, mbs, od: { ms:[..], ou:{ '2.5': [alt, ust] }, ... }, mb: { pazar: mbs } } */
+/** Bulten olayini sade bicime cevirir (olay listesi ya da tek mac detayi): { io, d (ISO), h, a, lg, mbs, od: { ms:[..], ou:{ '2.5': [alt, ust] }, ... }, mb: { pazar: mbs } } */
 export function parseIddaa(ev, comps = new Map()) {
   const od = {}, mb = {};
   for (const m of ev.m || []) {
     const def = MK[`${m.t}_${m.st}`]; if (!def || m.s === 0) continue;
     const [k, names] = def, by = new Map((m.o || []).map((o) => [String(o.n).trim(), o.odd]));
-    let vals = names.map((n) => by.get(n));
-    if (k === 'kk2' && vals.some((v) => !v)) vals = ['Var', 'Yok'].map((n) => by.get(n));
+    const vals = names.map((n) => by.get(n));
     if (vals.some((v) => !(v > 1))) continue;
     if (LINE.has(k)) { (od[k] ||= {})[String(m.sov)] = vals; mb[`${k}${m.sov}`] = m.mbc ?? ev.mbc; }
     else { od[k] = vals; mb[k] = m.mbc ?? ev.mbc; }

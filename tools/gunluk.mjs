@@ -1,7 +1,7 @@
 // Gunluk: iddaa bulteninin gercek oranlariyla gunluk banko kombine (toplam oran 1,35-1,45), 6+ gol ve
 // iki yarida karsilikli gol listeleri. Her gun bir kez, maclar baslamadan dondurulur; ertesi gun sonuclari islenir.
 // Ayrica her macin mac oncesi son oranlari saklanir (f/oran.json): sonuc biriktikce oran olasiliklari kalibre edilir.
-import { IDDAA, IDDAA_COMP, parseIddaa, matchEvents, fair, marketProbs } from '../web/src/oran.js';
+import { IDDAA, IDDAA_COMP, IDDAA_EVENT, parseIddaa, matchEvents, fair, marketProbs } from '../web/src/oran.js';
 import { isotonic, calib, footLegs } from '../web/src/kombine.js';
 
 const r3 = (x) => (x == null ? null : Math.round(x * 1000) / 1000);
@@ -42,10 +42,10 @@ export function bestCombo(legs, lo = 1.35, hi = 1.45) {
   return best;
 }
 
-export async function gunluk({ get, readJson, writeJson, NOW, matches, cal, ev, leagues }) {
-  const V = 1, now = NOW.getTime(), today = istDay(NOW.toISOString());
+export async function gunluk({ get, pool, readJson, writeJson, NOW, matches, cal, ev, leagues }) {
+  const V = 2, now = NOW.getTime(), today = istDay(NOW.toISOString());
   const G = readJson('f/gunluk.json', null), store = G && G.v === V ? G : { v: V, days: {}, start: today };
-  const hist = readJson('f/oran.json', { v: 1, ev: {} });
+  const hist = readJson('f/oran.json', { v: 2, ev: {} });
   // 1) bulten
   let iddaa = [];
   try {
@@ -80,6 +80,14 @@ export async function gunluk({ get, readJson, writeJson, NOW, matches, cal, ev, 
   const htLeague = new Map(); { const c = {}; for (const r of Object.values(ev)) { const o = (c[r[1]] ||= [0, 0]); o[0]++; if (r[7] != null) o[1]++; } for (const [k, [n, h]] of Object.entries(c)) htLeague.set(k, n >= 10 && h / n >= 0.8); }
   const day = (store.days[today] ||= { d: today });
   const upcoming = matches.filter((m) => m.od && m.st === 'pre' && istDay(m.t) === today && Date.parse(m.t) > now + 20 * 6e4 && !leagues[m.lg]?.nat);
+  // listeler kurulacaksa: aday maclarin butun pazarlari (iki yarida KG ve 2. yari KG yalnizca mac detayinda var)
+  if ((!day.g6 || !day.kk2) && upcoming.length && pool) {
+    const score = (m) => { const P0 = marketProbs(m.od); return Math.max(P0.G6 || 0, (P0.KK2 || 0) * 1.5, (P0['U2.5'] || 0) * 0.2); };
+    const cand = upcoming.slice().sort((x, y) => score(y) - score(x)).slice(0, 45);
+    const det = await pool(cand, 4, async (m) => { try { const j = await get(IDDAA_EVENT(m.io)); return j?.data ? [m, parseIddaa(j.data)] : null; } catch { return null; } });
+    let n = 0; for (const x of det) { if (!x) continue; const [m, d] = x; m.od = { ...m.od, ...d.od }; hist.ev[m.id] = { t: m.t, lg: m.lg, od: m.od }; n++; }
+    writeJson('f/oran.json', hist); console.log(`gunluk: ${n} mac detayi alindi`);
+  }
   if (!day.combo && upcoming.length) {
     const legs = [];
     for (const m of upcoming) {

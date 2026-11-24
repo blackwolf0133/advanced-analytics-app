@@ -22,3 +22,7 @@ test('gunluk kombine: toplam oran 1,35-1,45, MBS kurali, farkli maclar', () => {
   const L = [{ id: 'a', odd: 1.2, p: 0.8, mbs: 1 }, { id: 'a', odd: 1.18, p: 0.83, mbs: 1 }, { id: 'b', odd: 1.17, p: 0.82, mbs: 3 }, { id: 'c', odd: 1.19, p: 0.81, mbs: 2 }, { id: 'd', odd: 1.12, p: 0.86, mbs: 3 }];
   const b = bestCombo(L); assert.ok(b && b.odds >= 1.35 && b.odds <= 1.45 && new Set(b.legs.map((l) => l.id)).size === b.legs.length && Math.max(...b.legs.map((l) => l.mbs)) <= b.legs.length, JSON.stringify(b));
 });
+test('iki yarida KG dogrudan pazari (mac detayi) ve oranlardan turetilen deger ayni yerde', () => {
+  const e = parseIddaa({ i: 1, d: 1795550400, hn: 'Salford City', an: 'Sunderland U21', mbc: 3, m: [{ t: 2, st: 866, s: 1, o: [{ n: 'Hayır / Hayır', odd: 2.43 }, { n: 'Evet / Hayır', odd: 4.06 }, { n: 'Evet / Evet', odd: 4.64 }, { n: 'Hayır / Evet', odd: 2.76 }] }] });
+  const p = marketProbs(e.od).KK2; assert.ok(p > 0.15 && p < 0.18, p);
+});

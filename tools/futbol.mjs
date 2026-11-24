@@ -156,7 +156,7 @@ export async function futbol({ get, pool, readJson, writeJson, NOW, milliGames, 
   } catch (e) { console.warn('kombine', e); }
   const lgOut = {}; for (const [slug, L] of Object.entries(db.leagues)) { const pre = slug.split('.')[0];
     lgOut[slug] = { name: L.name, en: L.en, ulke: COUNTRY[pre] || 'Diğer', nat: L.nat, f: r3(share.get(slug) ?? share.get('*')), pri: PRIORITY.includes(slug) ? PRIORITY.indexOf(slug) : 99 }; }
-  try { await gunluk({ get, readJson, writeJson, NOW, matches: out, cal: kb?.cal || null, ev: db.ev, leagues: lgOut }); } catch (e) { console.warn('gunluk', e); }   // gercek oranlar + gunluk kombine
+  try { await gunluk({ get, pool, readJson, writeJson, NOW, matches: out, cal: kb?.cal || null, ev: db.ev, leagues: lgOut }); } catch (e) { console.warn('gunluk', e); }   // gercek oranlar + gunluk kombine
   const sum = (o) => ({ n: o.n, hit: r3(o.hit / o.n), sc: r3(o.sc / o.n), ht: o.nht ? r3(o.ht / o.nht) : null, nht: o.nht, ll: r3(o.ll / o.n), ...(o.base != null ? { base: r3(o.base / o.n) } : {}) });
   const karne = { live: Object.fromEntries(Object.entries(stat).map(([k, o]) => [k, sum(o)])), test: Object.fromEntries(Object.entries(test).map(([k, o]) => [k, sum(o)])) };
   writeJson('f/gun.json', { v: V, updated: NOW.toISOString(), leagues: lgOut, matches: out, karne, rho: M.rho, f: r3(share.get('*')), kb });
