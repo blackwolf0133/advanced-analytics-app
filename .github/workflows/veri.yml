@@ -2,11 +2,15 @@ name: Gunluk veri
 on:
   schedule:
     - cron: '17 4 * * *'
+    - cron: '47 8 * * *'
+    - cron: '13 12 * * *'
     - cron: '43 15 * * *'
+    - cron: '37 19 * * *'
+    - cron: '5 23 * * *'
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [tools/**, web/src/rating.js, web/src/dcglobal.js, web/src/espn.js, web/src/football.js, web/src/kombine.js, .github/workflows/veri.yml]
+    paths: [tools/**, web/src/rating.js, web/src/dcglobal.js, web/src/espn.js, web/src/football.js, web/src/kombine.js, web/src/oran.js, .github/workflows/veri.yml]
 permissions:
   contents: write
 concurrency:

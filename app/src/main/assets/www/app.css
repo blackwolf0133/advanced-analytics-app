@@ -72,3 +72,8 @@ table.t { width: 100%; border-collapse: collapse; font-size: 13px; } table.t th 
 .kcard.surpriz h2 .tag{background:#5a2a2a}
 .ksaved{padding:8px 0;border-top:1px solid rgba(255,255,255,.08);line-height:1.5}
 .ksaved.win b:first-child{color:#58e08f}.ksaved.lose b:first-child{color:#ff6b6b}
+.streak{display:grid;grid-template-columns:repeat(15,1fr);gap:3px;margin-top:4px}
+.streak span{text-align:center;font-size:11px;padding:5px 0;border-radius:5px;background:rgba(255,255,255,.06);color:var(--muted)}
+.streak .w{background:#1f5b3a;color:#bff5d4}.streak .l{background:#5b1f24;color:#ffc9cc}
+.ktab{width:100%;border-collapse:collapse;font-size:14px}.ktab th,.ktab td{padding:5px 4px;text-align:left;border-top:1px solid rgba(255,255,255,.07)}
+b.hit{color:#58e08f}

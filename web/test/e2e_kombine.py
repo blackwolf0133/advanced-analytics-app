@@ -5,7 +5,8 @@ HERE = pathlib.Path(__file__).parent; WWW = HERE.resolve().parents[1] / "app/src
 G = json.loads((HERE / "fixtures/veri_gun.json").read_text()); now = dt.datetime.now(dt.timezone.utc); up = dt.datetime.fromisoformat(G["updated"].replace("Z", "+00:00"))
 for m in G["matches"]: m["t"] = (now + (dt.datetime.fromisoformat(m["t"].replace("Z", "+00:00")) - up)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 G["updated"] = now.strftime("%Y-%m-%dT%H:%M:%S.000Z")
-MOCK = "window.__g = %s; window.Native = { httpGet: (id, url) => setTimeout(() => { if (url.endsWith('f/gun.json')) return AAD.onHttp(id, 200, window.__g); AAD.onHttp(id, 404, ''); }, 20) };" % json.dumps(json.dumps(G))
+D = (HERE / "fixtures/veri_gunluk.json").read_text()
+MOCK = "window.__g = %s; window.__d = %s; window.Native = { httpGet: (id, url) => setTimeout(() => { if (url.endsWith('f/gun.json')) return AAD.onHttp(id, 200, window.__g); if (url.endsWith('f/gunluk.json')) return AAD.onHttp(id, 200, window.__d); AAD.onHttp(id, 404, ''); }, 20) };" % (json.dumps(json.dumps(G)), json.dumps(D))
 srv = subprocess.Popen([sys.executable, "-m", "http.server", "8820", "--bind", "127.0.0.1"], cwd=WWW, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); time.sleep(1); errs = []
 try:
     with sync_playwright() as p:
@@ -13,14 +14,12 @@ try:
         pg = ctx.new_page(); pg.on("pageerror", lambda e: errs.append(str(e))); pg.add_init_script(MOCK); pg.goto("http://127.0.0.1:8820/index.html")
         pg.click('#nav [data-v="kombine"]'); pg.click("#k-dl"); pg.wait_for_selector("#k-up:not([disabled])", timeout=15000)
         pg.click('#k-when [data-w="72"]'); pg.wait_for_selector(".kcard", timeout=15000)
-        cards = pg.locator(".kcard"); print("kupon:", cards.count())
+        cards = pg.locator(".kcard.banko, .kcard.ms, .kcard.surpriz").filter(has=pg.locator(".ksave")); print("kupon:", cards.count())
         for i in range(cards.count()): print("---", cards.nth(i).inner_text().replace("\n", " | ")[:400])
-        assert cards.count() == 5
-        g6 = pg.inner_text(".kcard.gol6"); assert pg.locator(".kcard.gol6 .kleg").count() == 7 and "Beklenen tutan" in g6 and "milyonda" in g6, g6
-        assert pg.locator(".kcard.kk2 .kleg").count() == 7
-        pg.click('#k-gn [data-gn="10"]'); pg.wait_for_timeout(300); assert pg.locator(".kcard.gol6 .kleg").count() == 10
-        pg.locator('.ksave[data-mode="gol6"]').click(); pg.wait_for_selector(".ksaved")
-        pg.evaluate("localStorage.setItem('aad.kb_saved', '[]')"); pg.click('#k-gn [data-gn="7"]')
+        txt = pg.inner_text("#main"); print(txt[:1500])
+        assert "Günlük banko kombinen" in txt and "15 günlük deneme" in txt and "Dünün sonuçları" in txt and "TUTTU" in txt
+        assert pg.locator(".kcard.gol6").count() == 2 and pg.locator(".kcard.kk2").count() == 2 and "2 / 7 tuttu" in txt
+        assert pg.locator(".ksave").count() == 3
         txt = pg.inner_text("#main"); assert "Geçmiş test" in txt and "Adil oran" in txt
         pg.screenshot(path="/tmp/kombine.png", full_page=True)
         leg = pg.locator(".kcard.banko .kleg").first.inner_text(); print("ilk banko secim:", leg.replace("\n", " | "))

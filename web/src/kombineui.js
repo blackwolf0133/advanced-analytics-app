@@ -5,6 +5,7 @@ import * as B from './basket.js';
 import { read, write } from './store.js';
 import { $, esc, pct, num } from './ui.js';
 import { httpGet } from './net.js';
+import { dailyHtml, downloadDaily, loadDaily } from './gunlukui.js';
 
 const st = { gn: read('kb_gn', 7), sport: read('kb_sport', 'f'), when: read('kb_when', 'today'), n: read('kb_n', 3), mine: read('kb_mine', false), busy: false, cache: {} };
 const trTime = (t) => new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(t));
@@ -69,10 +70,11 @@ export function viewKombine(toast) {
   const lines = []; if (st.sport === 'f') lines.push([f.bt, 'futbol, son 26 hafta']); if (st.sport === 'b') lines.push([b.bt, 'basketbol']);
   const modes = st.sport === 'b' ? ['banko', 'surpriz'] : ['banko', 'ms', 'surpriz'];
   const coupons = Object.fromEntries(modes.map((m) => [m, K.coupon(legs, m, st.n)]));
-  const goalModes = st.sport === 'b' ? [] : ['gol6', 'kk2']; for (const m of goalModes) coupons[m] = K.coupon(f.legs, m, st.gn);
+  const goalModes = [];   // gol listeleri artik gercek oranlarla Gunluk bolumunde
   st.coupons = coupons;
   const chip = (k, v, cur, attr) => `<button data-${attr}="${k}" class="grow ${cur === k ? 'primary' : ''}" style="min-height:38px;padding:4px 6px">${v}</button>`;
-  $('#main').innerHTML = `
+  $('#main').innerHTML = `${dailyHtml(st.busy)}
+  <h3 style="margin:18px 4px 8px">Model kuponları</h3>
   <div class="row seg" id="k-sport">${[['f', '⚽ Futbol'], ['b', '◍ Basketbol'], ['fb', 'Karışık']].map(([k, v]) => chip(k, v, st.sport, 'sp')).join('')}</div>
   <div class="row seg" id="k-when">${[['today', 'Bugün'], ['tomorrow', 'Yarın'], ['72', '3 gün']].map(([k, v]) => chip(k, v, st.when, 'w')).join('')}</div>
   <div class="row seg" id="k-n"><span class="muted" style="align-self:center;margin-right:4px">Maç sayısı</span>${[2, 3, 4].map((k) => chip(k, k, st.n, 'n')).join('')}</div>
@@ -95,11 +97,15 @@ export function viewKombine(toast) {
   const update = async () => {
     st.busy = true; re();
     const errs = [];
+    try { await downloadDaily(httpGet); } catch (e) { errs.push('günlük'); }
     if (st.sport !== 'b' || savedNeeds('f')) { try { await T.download(httpGet); } catch (e) { errs.push('futbol'); } }
     if (st.sport !== 'f' || savedNeeds('b')) { try { await B.downloadAll(httpGet); st.cache = {}; } catch (e) { errs.push('basketbol'); } }
     st.busy = false; resolveSaved(); toast(errs.length ? `${errs.join(', ')} verisi alınamadı.` : 'Veriler güncellendi.'); re();
   };
   if ($('#k-dl')) $('#k-dl').onclick = update;
+  if ($('#k-dd')) $('#k-dd').onclick = update;
+  if (!loadDaily() && !st.autoDaily) { st.autoDaily = true; downloadDaily(httpGet).then(re, () => {}); }   // ilk acilista gunluk veri kendiliginden iner
+  else if (loadDaily() && Date.now() - (loadDaily().fetched || 0) > 30 * 6e4 && !st.busy && !st.autoDaily) { st.autoDaily = true; downloadDaily(httpGet).then(() => { st.autoDaily = false; re(); }, () => { st.autoDaily = false; }); }
   $('#k-up').onclick = update;
   document.querySelectorAll('.ksave').forEach((x) => { x.onclick = () => { const c = st.coupons[x.dataset.mode]; if (!c) return; saveCoupon(c); toast('Kupon kaydedildi; sonuçlar geldikçe işaretlenir.'); re(); }; });
   document.querySelectorAll('.kdel').forEach((x) => { x.onclick = () => { write('kb_saved', saved().filter((c) => c.id !== x.dataset.id)); re(); }; });
