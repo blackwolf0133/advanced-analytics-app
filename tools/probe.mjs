@@ -1,14 +1,16 @@
-// YZ ortak analiz: gercek bir mac uzerinde anahtarsiz uc servisle tartisma
 import fs from 'node:fs';
-import { PROVIDERS, DEFAULT_ON, matchBrief, debate } from '../web/src/aicore.js';
-const out = 'probe-out'; fs.mkdirSync(out, { recursive: true });
-const g = await (await fetch('https://raw.githubusercontent.com/blackwolf0133/advanced-analytics-app/veri/f/gun.json')).json();
-const m = g.matches.find((x) => x.pr && x.st === 'pre' && x.fh && x.fh.length >= 4 && x.fa.length >= 4) || g.matches.find((x) => x.pr && x.st === 'pre');
-const brief = matchBrief(m, g.leagues[m.lg].name, new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date(m.t)));
-const post = async (url, headers, body) => { const r = await fetch(url, { method: 'POST', headers, body, signal: AbortSignal.timeout(120000) }); const t = await r.text(); if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + t.slice(0, 200)); return t; };
-const t0 = Date.now();
-const res = await debate(post, PROVIDERS.filter((p) => DEFAULT_ON.includes(p.id)), {}, brief, (s) => console.log(s));
-console.log(brief); console.log('sure', Date.now() - t0, 'ms');
-for (const a of res.agents) console.log(a.letter, a.prov.name, a.error || '', a.error2 || '', JSON.stringify(a.first), '=>', JSON.stringify(a.final));
-console.log('ORTAK', JSON.stringify(res.cons));
-fs.writeFileSync(`${out}/ai.json`, JSON.stringify({ brief, res }, null, 1));
+fs.mkdirSync('probe-out', { recursive: true });
+const H = { 'user-agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/124 Mobile Safari/537.36', accept: 'application/json, text/plain, */*' };
+const urls = {
+  iddaa_events: 'https://sportsbookv2.iddaa.com/sportsbook/events?st=1&type=0&version=0',
+  iddaa_events_bb: 'https://sportsbookv2.iddaa.com/sportsbook/events?st=2&type=0&version=0',
+  iddaa_market: 'https://sportsbookv2.iddaa.com/sportsbook/get_market_config',
+  iddaa_comp: 'https://sportsbookv2.iddaa.com/sportsbook/competitions',
+  nesine: 'https://cdnbulten.nesine.com/api/bulten/getprebultenfull',
+  mackolik: 'https://www.mackolik.com/iddaa',
+  sahadan: 'https://www.sahadan.com/iddaa/',
+};
+for (const [k, u] of Object.entries(urls)) {
+  try { const r = await fetch(u, { headers: H }); const t = await r.text(); fs.writeFileSync(`probe-out/${k}.txt`, t); console.log(k, r.status, t.length, t.slice(0, 200).replace(/\s+/g, ' ')); }
+  catch (e) { console.log(k, 'ERR', e.message); fs.writeFileSync(`probe-out/${k}.txt`, 'ERR ' + e.message); }
+}
