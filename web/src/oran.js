@@ -9,9 +9,10 @@ const MK = {   // tip_alttip -> kisa ad ; secenek adlari sirasiyla
   '2_720': ['iykg', ['Var', 'Yok']], '2_821': ['y2kg', ['Var', 'Yok']], '2_866': ['kk2', ['Evet / Evet', 'Evet / Hayır', 'Hayır / Evet', 'Hayır / Hayır']], '2_88': ['iy', ['1', '0', '2']],
   '2_101': ['ou', ['Alt', 'Üst']], '2_60': ['iou', ['Alt', 'Üst']], '2_603': ['hou', ['Alt', 'Üst']], '2_604': ['aou', ['Alt', 'Üst']], '2_722': ['hiou', ['Alt', 'Üst']], '2_723': ['aiou', ['Alt', 'Üst']],
 };
-const LINE = new Set(['ou', 'iou', 'hou', 'aou', 'hiou', 'aiou', 'hcp', 'tot']);
+const LINE = new Set(['ou', 'iou', 'hou', 'aou', 'hiou', 'aiou', 'hcp', 'tot', 'h1t', 'h1h', 'qt']);
 // basketbol (uzatmalar dahil): mac sonucu, ev sahibine gore handikap, toplam sayi
-export const MK_BASKET = { '1_2': ['ms', ['1', '2']], '2_113': ['hcp', ['1', '2']], '2_114': ['tot', ['Alt', 'Üst']] };
+export const MK_BASKET = { '1_2': ['ms', ['1', '2']], '2_113': ['hcp', ['1', '2']], '2_114': ['tot', ['Alt', 'Üst']],
+  '2_116': ['h1t', ['Alt', 'Üst']], '2_115': ['h1h', ['1', '2']], '2_777': ['qt', ['Alt', 'Üst']] };   // ilk yari toplam, ilk yari handikap, ceyrek toplam ('ceyrek|cizgi')
 export const IDDAA_BASKET = 'https://sportsbookv2.iddaa.com/sportsbook/events?st=2&type=0&version=0';
 /** Bulten olayini sade bicime cevirir (olay listesi ya da tek mac detayi): { io, d (ISO), h, a, lg, mbs, od: { ms:[..], ou:{ '2.5': [alt, ust] }, ... }, mb: { pazar: mbs } } */
 export function parseIddaa(ev, comps = new Map(), map = MK) {

@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { gunlukBasket } from './gunlukb.mjs';
 import { paraAkisi } from './para.mjs';
+import { periyotlar } from './periyot.mjs';
 import { tune, prepare, walk, minSeenFor, phi } from '../web/src/rating.js';
 import { isotonic, basketLegs, couponTest } from '../web/src/kombine.js';
 const kbRows = [];   // basketbol kombine: ileriye donuk test tahminleri (butun ligler)
@@ -278,6 +279,7 @@ try {
   console.log('kombine basketbol:', kbRows.length, 'mac', JSON.stringify(index.kb.bt));
 } catch (e) { console.warn('kombine basketbol', e); }
 try { await paraAkisi({ get, readJson, writeJson, NOW }); } catch (e) { console.warn('para akisi', e); }   // halka acik bahis / para yuzdeleri
-try { await gunlukBasket({ get, readJson, writeJson, NOW, index }); } catch (e) { console.warn('gunluk basket', e); }   // basketbol gunluk banko kombine
+let per = null; try { per = await periyotlar({ get, pool, readJson, writeJson, NOW }); } catch (e) { console.warn('periyot', e); }   // ceyrek skorlari
+try { await gunlukBasket({ get, pool, readJson, writeJson, NOW, index, per }); } catch (e) { console.warn('gunluk basket', e); }   // basketbol gunluk banko kombine
 writeJson('index.json', index);
 console.log(`bitti: ${requests} istek, ${failures} basarisiz`);

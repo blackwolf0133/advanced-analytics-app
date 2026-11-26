@@ -89,11 +89,15 @@ function weeklyCard(O, title, lists = []) {
 }
 function basketPart(today, yest) {
   const B = loadDailyB(); if (!B) return '';
-  const T = B.days[today], Y = B.days[yest], out = [`<h3 style="margin:14px 4px 8px">Basketbol günlük banko</h3>`];
-  out.push(T?.combo ? comboCard(T.combo, 'Basketbol banko (en az 1,35)', 'bbanko') : `<div class="card"><h2>Basketbol banko</h2><p class="muted">Bugün için uygun banko yok ya da henüz kurulmadı. Kural: toplam oran en az 1,35 (tercihen 1,35–1,50), MBS'ye uyan, tutma olasılığı en yüksek tek maç ya da 2–3'lü. Örneğin üniversite maçları MBS 3 olduğu için tek başına oynanamaz; uygun seçenek yoksa zorla kupon kurulmaz.</p></div>`);
-  if (Y?.combo) out.push(comboCard(Y.combo, 'Dünün basketbol bankosu', 'bbanko'));
-  out.push(trial(B, today, '15 günlük deneme · basketbol'));
-  out.push(kasaCard(B.ozet, 'Sanal kasa · basketbol')); out.push(clvCard(B.ozet, 'Kapanış oranı · basketbol'));
+  const T = B.days[today] || {}, Y = B.days[yest] || {}, S = B.sum || {}, out = [`<h3 style="margin:14px 4px 8px">Basketbol kuponları</h3>`];
+  const TI = [['combo', 'Basketbol banko', 'en az 1,35 · 15 günlük seri', 'bbanko'], ['orta', 'Basketbol orta', 'oran 2,00–3,50', 'bbanko'], ['surpriz', 'Basketbol sürpriz', 'oran 3,50–9,00', 'surpriz']];
+  for (const [k, title, rule, cls] of TI) out.push(T[k] ? comboCard(T[k], title, cls) : `<div class="card"><h2>${title} <span class="tag">${rule}</span></h2><p class="muted" style="margin:0">Bugün için kurala uyan kupon yok ya da henüz kurulmadı. Seçimler yalnızca tutma olasılığı yeterince yüksek ve modelin karşı çıkmadığı maçlardan alınır; uygun seçenek yoksa zorla kupon kurulmaz.</p></div>`);
+  const yy = TI.filter(([k]) => Y[k]); if (yy.length) { out.push(`<h3 style="margin:14px 4px 8px">Dünün basketbol kuponları</h3>`); for (const [k, title, , cls] of yy) out.push(comboCard(Y[k], 'Dün · ' + title.replace('Basketbol ', ''), cls)); }
+  out.push(trial(B, today, '15 günlük deneme · basketbol banko'));
+  const st = TI.map(([k, title]) => [title, S[k]]).filter(([, x]) => x?.days);
+  if (st.length) out.push(`<div class="card"><h2>Basketbol kupon karnesi</h2>${st.map(([t, x]) => `<div>${t.replace('Basketbol ', '')}: <b>${x.won}/${x.days}</b> tuttu <span class="muted">(beklenen ${num(x.exp, 1)})</span></div>`).join('')}</div>`);
+  out.push(kasaCard(B.ozet, 'Sanal kasa · basketbol banko')); out.push(clvCard(B.ozet, 'Kapanış oranı · basketbol'));
+  out.push(`<details class="card"><summary><b>Basketbol kuponları nasıl kuruluyor?</b></summary><p class="muted" style="margin:8px 0 0">Pazarlar: maç sonucu, handikap, toplam sayı (uzatmalar dahil), ilk yarı toplam ve handikap, çeyrek toplamları. Her seçimin olasılığı iddaa oranından kâr payı temizlenerek bulunur ve güç modelimizle birleştirilir (piyasa %75, model %25). İlk yarı ve çeyrekler için model, maçın tahmini toplamını ligin ölçülen ilk yarı/çeyrek payıyla böler (NBA, NCAA, G League, NBL, EuroLeague, EuroCup çeyrek skorlarından). Banko: toplam oran 1,35–2,00, en yüksek tutma olasılığı. Orta ve sürpriz: her seçim en az %60 / %57 olasılıklı ve model onaylı; yüksek oran zayıf takımla değil, daha çok sayıda sağlam seçimle kurulur. Aynı maçtan tek seçim alınır, MBS kuralına uyulur.</p></details>`);
   return out.join('');
 }
 export function dailyHtml(busy) {
