@@ -8,7 +8,7 @@ import { viewKombine } from './kombineui.js';
 import * as AI from './aiui.js';
 import { onHttp } from './net.js';
 
-const VERSION = '0.11.0';
+const VERSION = '0.12.0';
 const st = { view: 'roulette', db: null, lastPred: undefined, armed: null, cap: 'off' };
 const TITLES = { roulette: 'Rulet', football: 'Futbol', basket: 'Basketbol', kombine: 'Kombine', settings: 'Ayarlar' };
 
@@ -127,8 +127,22 @@ function viewSettings() {
   <div class="card"><h2>Uygulama</h2><p class="muted">Advanced Analytics · telefon sürümü ${VERSION}<br>Veriler yalnızca bu telefonda saklanır. Uygulama yalnızca izinli adreslere bağlanır: maç verisi (GitHub, ESPN, football-data.co.uk) ve isterseniz yapay zekâ servisleri. Oyuna müdahale etmez ve bahis yapmaz; rulette yalnızca ekrandaki sayıları okur.</p></div>
   <div class="card"><h2>Ekran okuma hakkında</h2><ol class="steps"><li>Yalnızca Avrupa ruleti (0-36) desteklenir.</li><li>Brave ve Chrome’da ek ayar gerekmez.</li><li><b>Tor Browser</b> ekran kaydını varsayılan olarak engeller; görüntü siyah gelir. Okuma için Tor Browser’da Ayarlar → Gelişmiş → “Ekran görüntülerine izin ver” (Allow screenshots) açılmalıdır. Bu ayar açıkken telefondaki başka uygulamalar da Tor ekranını kaydedebilir ve sayfa “son uygulamalar” önizlemesinde görünür; işiniz bitince kapatın.</li><li>Uygulama bu engeli kendisi aşmaz ve aşmaya çalışmaz.</li><li>Yüzen pencere okunan tablonun üstünü kapatmamalıdır.</li><li>Telefonu döndürürseniz bölgeyi yeniden seçmeniz gerekir.</li><li>Okunamayan sayı kaydedilmez; yanlış kayıt olursa “Geri al” ile silin.</li></ol></div>
   ${AI.settingsCard()}
+  <div class="card"><h2>Sabah bildirimi</h2><label style="display:flex;gap:10px;align-items:center"><input type="checkbox" id="ntf" ${read('notify_daily', false) ? 'checked' : ''}> Her sabah 07:30'da günlük banko kombinelerini (futbol ve basketbol) bildir</label>
+    <p class="muted" style="margin:6px 0 0">Bildirim izni istenir. Pil tasarrufu nedeniyle birkaç dakika gecikebilir. ${window.Native?.setDailyNotify ? '' : 'Bu özellik yalnızca telefon uygulamasında çalışır.'}</p></div>
+  <div class="card"><h2>Yedekleme</h2><p class="muted" style="margin:0 0 8px">Rulet oturumları, kayıtlı kuponlar, ayarlar ve seçimler tek dosyaya yazılır (İndirilenler klasörü). Yeni telefonda “Geri yükle” ile o dosyayı seçin. İndirilebilen maç verileri dosyaya konmaz, kendiliğinden yeniden iner. Yapay zekâ anahtarı eklediyseniz o da dosyadadır; dosyayı kimseyle paylaşmayın.</p>
+    <div class="row"><button id="bk-save" class="grow primary">Yedekle</button><button id="bk-load" class="grow">Geri yükle</button></div></div>
   <div class="card"><h2>Veri</h2><p class="muted">${d.sessions.length} oturum, ${n} sayı kayıtlı.</p><button id="wipe" class="danger" style="width:100%">Bütün rulet verisini sil</button></div>`;
   AI.bindSettings(toast);
+  $('#ntf').onchange = (e) => { write('notify_daily', e.target.checked); if (window.Native?.setDailyNotify) Native.setDailyNotify(e.target.checked); toast(e.target.checked ? 'Sabah bildirimi açıldı (07:30).' : 'Sabah bildirimi kapatıldı.'); };
+  $('#bk-save').onclick = () => {
+    const keys = window.Native?.dbKeys ? JSON.parse(Native.dbKeys()) : Object.keys(localStorage).filter((k) => k.startsWith('aad.')).map((k) => k.slice(4));
+    const SKIP = /^(fg_gun|fg_daily|fg_move|fg_move_live|bb_daily|bb_index|fd_|fdn_|om_|ai_\d)/, data = {};
+    for (const k of keys) { if (SKIP.test(k) || (/^bb_/.test(k) && !/^bb_(sel|region|ncaa)$/.test(k))) continue; const v = read(k, undefined); if (v !== undefined && JSON.stringify(v).length < 3e6) data[k] = v; }
+    const text = JSON.stringify({ app: 'advanced-analytics', v: 1, made: new Date().toISOString(), data }), name = `aad-yedek-${new Date().toISOString().slice(0, 10)}.json`;
+    if (window.Native?.saveBackup) { const r = Native.saveBackup(name, text); toast(r ? `Yedek kaydedildi: ${r} (${Object.keys(data).length} kayıt)` : 'Yedek yazılamadı.', 6000); }
+    else { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = name; a.click(); toast('Yedek indirildi.'); }
+  };
+  $('#bk-load').onclick = () => { if (window.Native?.pickBackup) Native.pickBackup(); else toast('Geri yükleme telefon uygulamasında çalışır.'); };
   $('#wipe').onclick = (e) => confirmTap(e.target, 'Hepsi silinecek. Tekrar dokunun', () => { saveRoulette({ sessions: [], active: null, seq: 0 }); toast('Rulet verisi silindi.'); viewSettings(); });
 }
 
@@ -136,7 +150,16 @@ function viewSettings() {
 $('#nav').onclick = (e) => { const b = e.target.closest('[data-v]'); if (b) setView(b.dataset.v); };
 $('#ver').textContent = 'v' + VERSION;
 // Yuzen pencere arka planda sayi ekleyebilir: uygulama one gelince ve acikken duzenli olarak diskten yeniden okunur.
-window.AAD = { onHttp, onResume: () => { if (st.view === 'roulette') viewRoulette(); } };
+/** Geri yukleme: secilen yedek dosyasi (Native dosya secicisinden gelir). */
+function onBackup(text) {
+  if (!text) { toast('Dosya seçilmedi.'); return; }
+  let j; try { j = JSON.parse(text); } catch { toast('Dosya okunamadı (yedek dosyası değil).', 6000); return; }
+  if (j?.app !== 'advanced-analytics' || !j.data) { toast('Bu bir Advanced Analytics yedeği değil.', 6000); return; }
+  for (const [k, v] of Object.entries(j.data)) write(k, v);
+  if (j.data.notify_daily && window.Native?.setDailyNotify) Native.setDailyNotify(true);
+  toast(`${Object.keys(j.data).length} kayıt geri yüklendi (${String(j.made).slice(0, 10)}).`, 6000); setView(st.view);
+}
+window.AAD = { onHttp, onBackup, onResume: () => { if (st.view === 'roulette') viewRoulette(); } };
 setInterval(() => {
   if (st.view !== 'roulette' || document.hidden || st.armed) return;
   const cap = Native?.captureState ? Native.captureState() : 'none', s = activeSession(loadRoulette());

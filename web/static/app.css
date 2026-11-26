@@ -78,3 +78,7 @@ table.t { width: 100%; border-collapse: collapse; font-size: 13px; } table.t th 
 .ktab{width:100%;border-collapse:collapse;font-size:14px}.ktab th,.ktab td{padding:5px 4px;text-align:left;border-top:1px solid rgba(255,255,255,.07)}
 b.hit{color:#58e08f}
 .kcard.bbanko h2 .tag{background:#5a3a12}
+.odrop{color:#ff6b6b}.orise{color:#58e08f}
+.om{cursor:pointer}.omrow{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;font-size:13.5px;line-height:1.4}
+.omdet{margin-top:10px;border-top:1px solid rgba(255,255,255,.08);padding-top:8px}.oan{margin:4px 0 0;padding-left:18px;line-height:1.5}.oan li{margin-bottom:6px}
+.kasa svg{width:100%;height:auto}

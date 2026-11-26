@@ -19,11 +19,13 @@ const mark = (r) => (r === 'W' ? '<b class="hit">✓</b>' : r === 'L' ? '<b clas
 const scs = (l) => (l.sc ? ` <span class="muted">(${l.sc[0]}-${l.sc[1]}${l.sc[2] != null ? `, İY ${l.sc[2]}-${l.sc[3]}` : ''})</span>` : '');
 const pct = (p) => `%${num(p * 100, p < 0.1 ? 1 : 0)}`;
 
+/** Kapanis orani: aldigimiz oran son orandan yuksekse (oran sonradan dustu) yesil = iyi fiyat. */
+const closeTag = (l) => { if (!(l.close > 1)) return ''; const c = l.odd / l.close - 1; return `<div class="muted" style="font-size:12px">${Date.parse(l.t) > Date.now() ? 'şimdi' : 'kapanış'} ${o2(l.close)} <b class="${c > 0.005 ? 'hit' : c < -0.005 ? 'miss' : ''}">${c >= 0 ? '+' : ''}%${num(c * 100, 1)}</b></div>`; };
 function comboCard(c, title, cls = 'banko') {
   const st = c.res === 'W' ? '<b class="hit">TUTTU ✓ 🎯</b>' : c.res === 'L' ? '<b class="miss">YATTI ✗ 😞</b>' : c.res === 'V' ? 'iptal' : '';
   return `<div class="card kcard ${cls}"><h2>${title} <span class="tag">toplam oran ${o2(c.odds)}</span></h2>
     ${c.legs.map((l) => `<div class="kleg"><div>${mark(l.res)} <b>${esc(l.h)} – ${esc(l.a)}</b>${scs(l)}<div class="muted">${hm(l.t)} · ${esc(l.ln || l.lg)} · MBS ${l.mbs}${l.res ? '' : mvTag(l.mv)}</div></div>
-      <div class="kpick"><b>${esc(l.label)}</b><div class="muted">oran ${o2(l.odd)} · %${Math.round(l.p * 100)}</div></div></div>`).join('')}
+      <div class="kpick"><b>${esc(l.label)}</b><div class="muted">oran ${o2(l.odd)} · %${Math.round(l.p * 100)}</div>${closeTag(l)}</div></div>`).join('')}
     <div class="ktot"><span>Tutma olasılığı (tahmin) <b>${pct(c.p)}</b></span><span>${st || `Oran ${o2(c.odds)}`}</span></div>
     <p class="muted" style="margin:6px 0 0">Oranlar ${hm(c.built)} itibarıyla iddaa bülteninden; maç saatine kadar değişebilir, oynarken sitedeki güncel orana bakın.</p></div>`;
 }
@@ -50,12 +52,48 @@ function trial(G, today, title) {
     <p style="margin:8px 0 0">Tutan <b>${won}</b> · yatan <b>${lost}</b> · şu anki seri <b>${S.combo?.streak ?? 0}</b> gün · en uzun seri <b>${S.combo?.best ?? 0}</b></p>
     <p class="muted" style="margin:6px 0 0">Gerçekçi beklenti: kuponların ortalama tutma olasılığı %${Math.round(avgP * 100)}. 15 günde ortalama ${num(avgP * 15, 0)} tutar; 15'inin art arda tutma olasılığı yaklaşık ${oneIn(avgP ** 15)}.</p></div>`;
 }
+const TL = (v) => `${v < 0 ? '−' : v > 0 ? '+' : ''}${Math.abs(Math.round(v)).toLocaleString('tr-TR')} TL`;
+function chart(series) {
+  const all = series.flatMap((s) => s.pts.map((p) => p[1])); if (!all.length) return '';
+  const lo = Math.min(0, ...all), hi = Math.max(0, ...all), n = Math.max(...series.map((s) => s.pts.length)), W = 320, H = 120, P = 6;
+  const x = (i, len) => P + (len <= 1 ? 0 : (i / (len - 1)) * (W - 2 * P)), y = (v) => H - P - ((v - lo) / (hi - lo || 1)) * (H - 2 * P);
+  return `<svg viewBox="0 0 ${W} ${H}"><line x1="0" x2="${W}" y1="${y(0)}" y2="${y(0)}" stroke="rgba(255,255,255,.25)" stroke-dasharray="4 4"/>
+    ${series.map((s) => `<polyline fill="none" stroke="${s.col}" stroke-width="2.5" points="${s.pts.map((p, i) => `${x(i, s.pts.length).toFixed(1)},${y(p[1]).toFixed(1)}`).join(' ')}"/>`).join('')}</svg>
+    <div class="muted" style="font-size:12px">${series.map((s) => `<span style="color:${s.col}">━</span> ${s.name}: <b>${TL(s.pts[s.pts.length - 1]?.[1] || 0)}</b>`).join(' · ')}</div>`;
+}
+const COLS = ['#7aa2ff', '#ffb454', '#58e08f', '#ff6b6b', '#c58cff'];
+function kasaCard(O, title, listNames = {}) {
+  if (!O?.kasa) return ''; const S = [];
+  if (O.kasa.combo.length) S.push({ name: 'Günlük kombine', pts: O.kasa.combo, col: COLS[0] });
+  Object.entries(O.kasa.lists || {}).forEach(([k, pts], i) => { if (pts.length) S.push({ name: listNames[k] || k, pts, col: COLS[i + 1] }); });
+  if (!S.length) return '';
+  return `<div class="card kasa"><h2>${title} <span class="tag">sanal</span></h2>${chart(S)}
+    <p class="muted" style="margin:6px 0 0">Gerçek para değil: her günlük kombineye ${O.kasa.stake.combo} TL${Object.keys(O.kasa.lists || {}).length ? `, listelerdeki her maça tek tek ${O.kasa.stake.list} TL` : ''} yatırılmış gibi hesaplanır (o günkü iddaa oranıyla; iptal maç 1,00). Kasanın uzun vadede sıfırın üstünde kalıp kalmadığı, "tuttu" hissinden çok daha doğru ölçüdür; 100–200 kupondan önce karar vermeyin.</p></div>`;
+}
+function clvCard(O, title) {
+  const c = O?.clv?.combo; if (!c || !c.n) return '';
+  const l = Object.entries(O.clv.lists || {}).filter(([, v]) => v.n);
+  const v = c.avg > 0.005 ? '<b class="hit">Olumlu</b>: seçimlerimiz sonradan düşen oranlara denk geliyor, yani piyasa bizim yönümüze hareket ediyor. Kalıcı olursa gerçek bir avantaj işaretidir.' : c.avg < -0.005 ? '<b class="miss">Olumsuz</b>: seçtiğimiz oranlar sonradan yükseliyor, piyasa bize katılmıyor. Kalıcı olursa avantaj yok demektir.' : 'Nötr: piyasa ne bize doğru ne karşı hareket ediyor.';
+  return `<div class="card"><h2>${title} <span class="tag">${c.n} seçim</span></h2>
+    <p style="margin:0">Ortalama: <b class="${c.avg > 0 ? 'hit' : c.avg < 0 ? 'miss' : ''}">${c.avg >= 0 ? '+' : ''}%${num(c.avg * 100, 1)}</b> · lehimize olan: %${Math.round(c.pos * 100)}</p>
+    ${l.length ? `<p class="muted" style="margin:4px 0 0">${l.map(([k, x]) => `${k}: ${x.avg >= 0 ? '+' : ''}%${num(x.avg * 100, 1)} (${x.n})`).join(' · ')}</p>` : ''}
+    <p class="muted" style="margin:6px 0 0">${v} Profesyonellerin ölçütü budur: aldığınız oran maç başlamadan önceki son orandan iyiyse (+), sonuçlar ne olursa olsun uzun vadede kazanma şansı vardır. 15 günlük sonuç şansa çok bağlıdır, kapanış oranı 2–3 haftada daha net konuşur.</p></div>`;
+}
+function weeklyCard(O, title, lists = []) {
+  const W = (O?.weeks || []).filter((w) => w.combo.n || Object.keys(w.lists).length).slice(-6).reverse(); if (!W.length) return '';
+  const dd = (d) => `${d.slice(8)}.${d.slice(5, 7)}`;
+  return `<div class="card"><h2>${title}</h2><table class="ktab"><tr><th>Hafta</th><th>Kombine</th><th>Kasa</th><th>CLV</th>${lists.map(([, n]) => `<th>${n}</th>`).join('')}</tr>
+    ${W.map((w) => `<tr><td>${dd(w.w)}</td><td>${w.combo.n ? `${w.combo.won}/${w.combo.n} <span class="muted">(${num(w.combo.exp, 1)})</span>` : '–'}</td><td class="${w.combo.pl > 0 ? 'hit' : w.combo.pl < 0 ? 'miss' : ''}">${w.combo.n ? TL(w.combo.pl) : '–'}</td><td>${w.clv == null ? '–' : `${w.clv >= 0 ? '+' : ''}%${num(w.clv * 100, 1)}`}</td>
+      ${lists.map(([k]) => { const x = w.lists[k]; return `<td>${x ? `${x.hits}/${x.days * 7} <span class="muted">(${num(x.exp, 1)})</span>` : '–'}</td>`; }).join('')}</tr>`).join('')}</table>
+    <p class="muted" style="margin:6px 0 0">Parantez içi: olasılıklara göre beklenen. Gerçekleşen beklenene yakınsa sistem dürüst çalışıyor; sürekli üstündeyse avantaj, altındaysa kalibrasyon sorunu vardır.</p></div>`;
+}
 function basketPart(today, yest) {
   const B = loadDailyB(); if (!B) return '';
   const T = B.days[today], Y = B.days[yest], out = [`<h3 style="margin:14px 4px 8px">Basketbol günlük banko</h3>`];
   out.push(T?.combo ? comboCard(T.combo, 'Basketbol banko (en az 1,35)', 'bbanko') : `<div class="card"><h2>Basketbol banko</h2><p class="muted">Bugün için uygun banko yok ya da henüz kurulmadı. Kural: toplam oran en az 1,35 (tercihen 1,35–1,50), MBS'ye uyan, tutma olasılığı en yüksek tek maç ya da 2–3'lü. Örneğin üniversite maçları MBS 3 olduğu için tek başına oynanamaz; uygun seçenek yoksa zorla kupon kurulmaz.</p></div>`);
   if (Y?.combo) out.push(comboCard(Y.combo, 'Dünün basketbol bankosu', 'bbanko'));
   out.push(trial(B, today, '15 günlük deneme · basketbol'));
+  out.push(kasaCard(B.ozet, 'Sanal kasa · basketbol')); out.push(clvCard(B.ozet, 'Kapanış oranı · basketbol'));
   return out.join('');
 }
 export function dailyHtml(busy) {
@@ -66,6 +104,9 @@ export function dailyHtml(busy) {
   const parts = [`<h3 style="margin:4px 4px 8px">Günlük · ${dm(today)}</h3>`];
   parts.push(T?.combo ? comboCard(T.combo, 'Günlük banko kombinen') : `<div class="card"><h2>Günlük banko kombinen</h2><p class="muted">Bugün için henüz kurulmadı (iddaa bülteni ve maç eşleşmesi bekleniyor). Veri hattı her sabah 07:17'de ve gün içinde birkaç kez çalışır.</p></div>`);
   parts.push(trial(G, today, '15 günlük deneme · futbol'));
+  const LN = { g6: '6+ gol', kk2: '2 yarı KG', u35: '3,5 Üst', kgv: 'KG Var' };
+  parts.push(kasaCard(G.ozet, 'Sanal kasa · futbol', LN)); parts.push(clvCard(G.ozet, 'Kapanış oranı (CLV) · futbol'));
+  parts.push(weeklyCard(G.ozet, 'Haftalık rapor · futbol', Object.entries(LN)));
   parts.push(basketPart(today, yest));
   const LISTS = [['g6', '6+ gol listesi', 'gol6', 'Maçta 6 ya da daha fazla gol. İki yol birleştirilir: iddaa\'nın “Toplam Gol 6+” oranı ve alt/üst + 1X2 çizgilerinden hesaplanan gol beklentisi. Sıradan bir maçta %6.'],
     ['kk2', 'İki yarıda karşılıklı gol', 'kk2', 'İlk yarıda da ikinci yarıda da iki takım gol atar. İddaa\'nın “1. ve 2. Yarıda KG” oranı ile çizgilerden hesaplanan değer birleştirilir. Sıradan bir maçta %5.'],

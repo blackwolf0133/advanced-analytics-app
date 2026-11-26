@@ -5,6 +5,7 @@ import { read, write } from './store.js';
 import { $, esc, pct, num } from './ui.js';
 import { httpGet } from './net.js';
 import { viewToday, stop as stopToday } from './todayui.js';
+import { viewOdds } from './oranui.js';
 
 const st = { div: S.byKey(read('fb_sel', 'T1')).key, tab: 'week', db: null, ms: [], M: null, ev: null, evFor: null, busy: false, report: null, home: null, away: null, toast: null };
 const trTime = (ms) => new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(ms));
@@ -18,11 +19,12 @@ function reload() {
   st.M = st.ms.length >= MIN ? F.model(st.ms) : null;
   if (st.evFor !== st.div + st.ms.length) { st.ev = null; st.evFor = null; }
 }
-const seg = (mode) => `<div class="row seg" id="f-mode">${[['today', 'Günün maçları'], ['league', 'Lig analizi']].map(([k, v]) => `<button data-mode="${k}" class="grow ${mode === k ? 'primary' : ''}">${v}</button>`).join('')}</div>`;
+const seg = (mode) => `<div class="row seg" id="f-mode">${[['today', 'Günün maçları'], ['odds', 'Oran hareketi'], ['league', 'Lig analizi']].map(([k, v]) => `<button data-mode="${k}" class="grow ${mode === k ? 'primary' : ''}">${v}</button>`).join('')}</div>`;
 function bindMode() { $('#f-mode').onclick = (e) => { const b = e.target.closest('[data-mode]'); if (b) { write('fb_mode', b.dataset.mode); viewFootball(); } }; }
 export function viewFootball(toast) {
   st.toast = toast || st.toast;
   if (read('fb_mode', 'today') === 'today') { $('#main').innerHTML = seg('today') + '<div id="f-today"></div>'; bindMode(); viewToday(st.toast, $('#f-today')); return; }
+  if (read('fb_mode', 'today') === 'odds') { stopToday(); $('#main').innerHTML = seg('odds') + '<div id="f-odds"></div>'; bindMode(); viewOdds(st.toast, $('#f-odds')); return; }
   stopToday(); reload();
   const n = st.ms.length, ys = Object.keys(st.db.seasons).map(Number).sort();
   $('#main').innerHTML = seg('league') + `

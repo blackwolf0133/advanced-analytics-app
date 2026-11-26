@@ -3,6 +3,7 @@
 import { IDDAA_BASKET, IDDAA_COMP, MK_BASKET, parseIddaa, matchEvents, fair } from '../web/src/oran.js';
 import * as R from '../web/src/rating.js';
 import { bestCombo } from './gunluk.mjs';
+import { summarize } from './ozet.mjs';
 
 const r3 = (x) => (x == null ? null : Math.round(x * 1000) / 1000);
 const istDay = (ms) => new Date(ms + 3 * 36e5).toISOString().slice(0, 10);
@@ -35,11 +36,20 @@ export async function gunlukBasket({ get, readJson, writeJson, NOW, index }) {
   const G = readJson('b/gunluk.json', null), store = G && G.v === V ? G : { v: V, days: {} };
   const leagues = index.basket.filter((l) => !/^ncaaw/.test(l.id)), dbs = new Map();
   for (const l of leagues) { const db = readJson(`b/${l.id}.json`, null); if (db) dbs.set(l.id, db); }
-  const day = (store.days[today] ||= { d: today });
-  if (!day.combo) {
-    let iddaa = [];
+  const day = (store.days[today] ||= { d: today }), early = new Date(now + 3 * 36e5).getUTCHours() < 7;
+  const pending = Object.values(store.days).some((d) => d.combo?.legs.some((l) => Date.parse(l.t) > now));
+  let iddaa = [];
+  if ((!day.combo && !early) || pending) {
     try { const [j, c] = await Promise.all([get(IDDAA_BASKET), get(IDDAA_COMP)]); const comps = new Map((c?.data || []).map((x) => [x.i, x.n]));
-      iddaa = (j?.data?.events || []).filter((e) => e.d * 1000 > now + 20 * 6e4).map((e) => parseIddaa(e, comps, MK_BASKET)).filter((e) => e.od.ms); } catch (e) { console.warn('gunluk basket: iddaa', e.message); }
+      iddaa = (j?.data?.events || []).filter((e) => e.d * 1000 > now + 5 * 6e4).map((e) => parseIddaa(e, comps, MK_BASKET)).filter((e) => e.od.ms); } catch (e) { console.warn('gunluk basket: iddaa', e.message); }
+  }
+  // kapanis orani: baslamamis secimlerin guncel orani
+  const byIo = new Map(iddaa.map((e) => [e.io, e]));
+  for (const d of Object.values(store.days)) for (const l of d.combo?.legs || []) {
+    if (Date.parse(l.t) <= now) continue; const e = byIo.get(l.io); if (!e) continue;
+    const o = legsOf(e, { h: l.h, a: l.a, neu: 0 }, null).find((x) => x.mk === l.mk)?.odd; if (o > 1) { l.close = o; l.closeAt = NOW.toISOString().slice(0, 16); }
+  }
+  if (!day.combo && !early) {
     // aday maclar: bugun (Turkiye saati) baslayip yarin sabah 10:00'a kadar
     const until = Date.parse(today + 'T07:00:00Z') + 864e5, games = [];
     for (const [id, db] of dbs) for (const [utc, h, a, neu] of db.upcoming || []) { const t = Date.parse(utc); if (t > now + 20 * 6e4 && t <= until) games.push({ id: `${id}|${utc}|${h}`, lg: id, ln: leagues.find((l) => l.id === id)?.name, t: utc, h, a, neu }); }
@@ -72,6 +82,7 @@ export async function gunlukBasket({ get, readJson, writeJson, NOW, index }) {
   const done = Object.keys(store.days).sort().map((d) => store.days[d].combo).filter((c) => c && c.res && c.res !== 'V');
   let streak = 0; for (let i = done.length - 1; i >= 0 && done[i].res === 'W'; i--) streak++;
   let best = 0, run = 0; for (const c of done) { run = c.res === 'W' ? run + 1 : 0; best = Math.max(best, run); }
+  store.ozet = summarize(store.days, []);
   store.sum = { combo: { days: done.length, won: done.filter((c) => c.res === 'W').length, exp: r3(done.reduce((s, c) => s + c.p, 0)), streak, best } };
   store.updated = NOW.toISOString();
   writeJson('b/gunluk.json', store);
