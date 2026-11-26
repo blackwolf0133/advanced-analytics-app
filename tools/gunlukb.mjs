@@ -84,7 +84,9 @@ export async function gunlukBasket({ get, pool, readJson, writeJson, NOW, index,
   const G = readJson('b/gunluk.json', null), store = G && G.v === V ? G : { v: V, days: {} };
   const leagues = index.basket.filter((l) => !/^ncaaw/.test(l.id)), dbs = new Map();
   for (const l of leagues) { const db = readJson(`b/${l.id}.json`, null); if (db) dbs.set(l.id, db); }
-  const day = (store.days[today] ||= { d: today }), early = new Date(now + 3 * 36e5).getUTCHours() < 7;
+  const RV = 2, day = (store.days[today] ||= { d: today });
+  for (const k of Object.keys(TIERS)) if (day[k] && day[k].rv !== RV && day[k].legs.every((l) => Date.parse(l.t) > now + 20 * 6e4)) delete day[k];   // kural degisti, hicbir mac baslamadi: yeniden kur
+  const early = new Date(now + 3 * 36e5).getUTCHours() < 7;
   const need = Object.keys(TIERS).some((k) => !day[k]) && !early;
   const pending = Object.values(store.days).some((d) => Object.keys(TIERS).some((k) => d[k]?.legs.some((l) => Date.parse(l.t) > now)));
   let iddaa = [];
@@ -112,7 +114,8 @@ export async function gunlukBasket({ get, pool, readJson, writeJson, NOW, index,
       if (!models.has(g.lg)) models.set(g.lg, model(dbs.get(g.lg)));
       const ps = per?.st?.[g.lg]?.n >= 30 ? per.st[g.lg] : null;
       for (const l of legsOf(e, g, models.get(g.lg), ps)) {
-        const p = l.q != null ? 0.75 * l.pm + 0.25 * l.q : l.pm;
+        // model piyasadan cok farkliysa (or. sezon basi NCAA) bu genelde modelin hatasidir: etkisi sinirlanir
+        const p = l.q != null ? l.pm + 0.25 * Math.max(-0.08, Math.min(0.08, l.q - l.pm)) : l.pm;
         legs.push({ id: g.id, lg: g.lg, ln: g.ln, t: g.t, h: g.h, a: g.a, io: e.io, mk: l.mk, label: l.label, kind: l.kind, odd: l.odd, mbs: l.mbs, pm: r3(l.pm), q: r3(l.q), p: r3(p), edge: r3(l.q != null ? l.q - l.pm : null) });
       }
     }
@@ -120,9 +123,9 @@ export async function gunlukBasket({ get, pool, readJson, writeJson, NOW, index,
     for (const [k, T] of Object.entries(TIERS)) {
       if (day[k]) continue;
       // secim kurali: model varsa piyasadan belirgin dusuk olmamali (banko 8, digerleri 3 puan); ayni mactan tek secim
-      const ok = legs.filter((l) => l.q == null || l.q >= l.pm - T.agree);
+      const ok = legs.filter((l) => (l.q == null || l.q >= l.pm - T.agree) && l.pm >= T.minP - 0.02);   // piyasa da inanmali
       const b = bestTier(ok, T);
-      if (b) { day[k] = { built: NOW.toISOString(), tier: T.name, odds: r3(b.odds), p: r3(b.p), legs: b.legs.map((l) => ({ ...l, res: null })) }; console.log(`gunluk basket ${T.name}:`, b.legs.length, 'secim, oran', r3(b.odds), 'olasilik', r3(b.p)); }
+      if (b) { day[k] = { rv: RV, built: NOW.toISOString(), tier: T.name, odds: r3(b.odds), p: r3(b.p), legs: b.legs.map((l) => ({ ...l, res: null })) }; console.log(`gunluk basket ${T.name}:`, b.legs.length, 'secim, oran', r3(b.odds), 'olasilik', r3(b.p)); }
     }
   }
   // sonuclar
