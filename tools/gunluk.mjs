@@ -70,7 +70,7 @@ export async function gunluk({ get, pool, readJson, writeJson, NOW, matches, cal
     const e = pairs.get(m.id); if (!e) continue;
     m.od = e.od; m.io = e.io; const c = cons.get(m.id); if (c) m.pc = c;
     if (m.st !== 'pre') continue;
-    const h0 = hist.ev[m.id], v = snap(e.od), s = h0?.s ? h0.s.slice() : [];
+    const h0 = hist.ev[m.id], v = snap(e.od), s = h0?.s ? h0.s.slice() : h0?.od0 ? [[(h0.t0 || NOW.toISOString()).slice(0, 16), ...snap(h0.od0)]] : [];   // eski kayitlarda acilis od0'dan
     if (!s.length || JSON.stringify(s[s.length - 1].slice(1)) !== JSON.stringify(v)) s.push([NOW.toISOString().slice(0, 16), ...v]);
     while (s.length > 30) s.splice(1, 1);                                     // ilk (acilis) kalir, aradakiler seyrelir
     const q = m.pr ? Object.fromEntries(footLegs({ ...m, f: leagues[m.lg]?.f }, cal).map((l) => [l.mk, r3(l.q)])) : h0?.q || null;
