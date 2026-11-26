@@ -6,6 +6,7 @@ import { read, write } from './store.js';
 import { $, esc, pct, num } from './ui.js';
 import { httpGet } from './net.js';
 import { dailyHtml, downloadDaily, loadDaily } from './gunlukui.js';
+import { viewPara } from './paraui.js';
 
 const st = { gn: read('kb_gn', 7), sport: read('kb_sport', 'f'), when: read('kb_when', 'today'), n: read('kb_n', 3), mine: read('kb_mine', false), busy: false, cache: {} };
 const trTime = (t) => new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(t));
@@ -64,7 +65,11 @@ function couponCard(c, mode, ctx) {
     ${ctx.lines.map(([bt, label]) => btLine(bt, mode, st.n, label)).join('')}
     <button class="ksave" data-mode="${mode}" style="width:100%;margin-top:8px">Kuponu kaydet ve takip et</button></div>`;
 }
+const topSeg = (k) => `<div class="row seg" id="k-top">${[['daily', 'Günlük ve kuponlar'], ['para', '💰 Para akışı']].map(([v, l]) => `<button data-top="${v}" class="grow ${k === v ? 'primary' : ''}">${l}</button>`).join('')}</div>`;
 export function viewKombine(toast) {
+  const top = read('kb_top', 'daily');
+  const bindTop = () => { $('#k-top').onclick = (e) => { const b = e.target.closest('[data-top]'); if (b) { write('kb_top', b.dataset.top); viewKombine(toast); } }; };
+  if (top === 'para') { $('#main').innerHTML = topSeg('para') + '<div id="k-para"></div>'; bindTop(); viewPara(toast, $('#k-para')); return; }
   const f = st.sport !== 'b' ? footLegs() : { legs: [], ok: true }, b = st.sport !== 'f' ? basketLegs() : { legs: [], ok: true };
   const legs = [...f.legs, ...b.legs], need = (st.sport !== 'b' && !f.ok) || (st.sport !== 'f' && !b.ok);
   const lines = []; if (st.sport === 'f') lines.push([f.bt, 'futbol, son 26 hafta']); if (st.sport === 'b') lines.push([b.bt, 'basketbol']);
@@ -73,7 +78,7 @@ export function viewKombine(toast) {
   const goalModes = [];   // gol listeleri artik gercek oranlarla Gunluk bolumunde
   st.coupons = coupons;
   const chip = (k, v, cur, attr) => `<button data-${attr}="${k}" class="grow ${cur === k ? 'primary' : ''}" style="min-height:38px;padding:4px 6px">${v}</button>`;
-  $('#main').innerHTML = `${dailyHtml(st.busy)}
+  $('#main').innerHTML = `${topSeg('daily')}${dailyHtml(st.busy)}
   <h3 style="margin:18px 4px 8px">Model kuponları</h3>
   <div class="row seg" id="k-sport">${[['f', '⚽ Futbol'], ['b', '◍ Basketbol'], ['fb', 'Karışık']].map(([k, v]) => chip(k, v, st.sport, 'sp')).join('')}</div>
   <div class="row seg" id="k-when">${[['today', 'Bugün'], ['tomorrow', 'Yarın'], ['72', '3 gün']].map(([k, v]) => chip(k, v, st.when, 'w')).join('')}</div>
@@ -88,7 +93,7 @@ export function viewKombine(toast) {
   ${savedCard()}
   <button id="k-up" style="width:100%;margin-bottom:12px" ${st.busy ? 'disabled' : ''}>${st.busy ? 'Güncelleniyor…' : 'Verileri ve sonuçları güncelle'}</button>
   <div class="warn">Nasıl kurulur: Olasılıklar istatistik modelinden gelir ve geçmiş testte gerçekte ne sıklıkla tuttuğuna göre düzeltilir (kalibrasyon). Kupon olasılığı seçimlerin çarpımıdır; maçların birbirinden bağımsız olduğu varsayılır. “Adil oran” = 1 ÷ olasılık; bahis sitelerinin oranları kâr payı yüzünden genelde bundan düşüktür. Sakatlık, kadro ve motivasyon bilgisi yoktur. Kazanç garantisi yoktur; eğlence içindir.</div>`;
-  const re = () => viewKombine(toast);
+  const re = () => viewKombine(toast); bindTop();
   $('#k-sport').onclick = (e) => { const x = e.target.closest('[data-sp]'); if (x) { st.sport = x.dataset.sp; write('kb_sport', st.sport); re(); } };
   $('#k-when').onclick = (e) => { const x = e.target.closest('[data-w]'); if (x) { st.when = x.dataset.w; write('kb_when', st.when); re(); } };
   if ($('#k-gn')) $('#k-gn').onclick = (e) => { const x = e.target.closest('[data-gn]'); if (x) { st.gn = Number(x.dataset.gn); write('kb_gn', st.gn); re(); } };

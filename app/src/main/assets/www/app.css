@@ -82,3 +82,8 @@ b.hit{color:#58e08f}
 .om{cursor:pointer}.omrow{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;font-size:13.5px;line-height:1.4}
 .omdet{margin-top:10px;border-top:1px solid rgba(255,255,255,.08);padding-top:8px}.oan{margin:4px 0 0;padding-left:18px;line-height:1.5}.oan li{margin-bottom:6px}
 .kasa svg{width:100%;height:auto}
+.pmk{margin-top:8px}.prow{display:grid;grid-template-columns:1fr 90px 74px;gap:6px;align-items:center;font-size:13.5px;padding:2px 0}
+.prow.big .pname{color:#ffd35a;font-weight:600}.pname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pbar{position:relative;height:12px;background:rgba(255,255,255,.07);border-radius:6px;overflow:hidden}
+.pbar i{position:absolute;left:0;top:0;bottom:0;border-radius:6px}.pbar .pt{background:rgba(122,162,255,.45)}.pbar .pm{background:#7aa2ff;top:4px;bottom:4px}
+.pnum{text-align:right;font-size:12.5px}
