@@ -77,3 +77,4 @@ table.t { width: 100%; border-collapse: collapse; font-size: 13px; } table.t th 
 .streak .w{background:#1f5b3a;color:#bff5d4}.streak .l{background:#5b1f24;color:#ffc9cc}
 .ktab{width:100%;border-collapse:collapse;font-size:14px}.ktab th,.ktab td{padding:5px 4px;text-align:left;border-top:1px solid rgba(255,255,255,.07)}
 b.hit{color:#58e08f}
+.kcard.bbanko h2 .tag{background:#5a3a12}

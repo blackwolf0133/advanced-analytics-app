@@ -3,6 +3,7 @@ import * as B from './basket.js';
 import { read, write } from './store.js';
 import { $, esc, pct, num } from './ui.js';
 import { httpGet } from './net.js';
+import { fetchLive } from './bblive.js';
 
 const st = { id: read('bb_sel', 'all'), min: 0.5, tab: 'games', db: null, model: null, ev: null, key: null, busy: false, home: null, away: null, neutral: false,
   region: read('bb_region', 'Hepsi'), ncaa: read('bb_ncaa', false), cache: {}, step: '' };
@@ -143,7 +144,7 @@ function viewAll() {
   </div>
   ${have.length ? `<div class="row" id="b-reg" style="margin-bottom:8px;flex-wrap:wrap">${REGIONS.map((r) => `<button data-r="${r}" class="grow ${st.region === r ? 'primary' : ''}" style="min-height:36px;padding:4px 6px;font-size:12.5px">${r}</button>`).join('')}</div>
     <label style="display:flex;gap:8px;align-items:center;margin:0 4px 10px"><input type="checkbox" id="b-ncaa" ${st.ncaa ? 'checked' : ''}> Üniversite maçlarını da göster (NCAA, günde yüzlerce maç)</label>
-    <div class="row" id="b-tabs" style="margin-bottom:12px">${[['games', 'Yaklaşan maçlar'], ['results', 'Sonuçlar']].map(([k, v]) => `<button data-t="${k}" class="grow ${st.tab === k ? 'primary' : ''}" style="min-height:40px">${v}</button>`).join('')}</div><div id="b-body"></div>` : ''}
+    <div class="row" id="b-tabs" style="margin-bottom:12px">${[['live', '● Canlı'], ['games', 'Yaklaşan'], ['results', 'Sonuçlar']].map(([k, v]) => `<button data-t="${k}" class="grow ${st.tab === k ? 'primary' : ''}" style="min-height:40px">${v}</button>`).join('')}</div><div id="b-body"></div>` : ''}
   <div class="warn">Olasılıklar yalnızca geçmiş maç skorlarından hesaplanır. Sakatlık, kadro ve dinlenme bilgisi yoktur. Kazanç garantisi yoktur.</div>`;
   $('#b-lg').onchange = (e) => { st.id = e.target.value; write('bb_sel', st.id); st.home = st.away = null; viewBasket(); };
   $('#b-all').onclick = async () => {
@@ -157,8 +158,11 @@ function viewAll() {
   $('#b-reg').onclick = (e) => { const b = e.target.closest('[data-r]'); if (b) { st.region = b.dataset.r; write('bb_region', st.region); viewBasket(); } };
   $('#b-ncaa').onchange = (e) => { st.ncaa = e.target.checked; write('bb_ncaa', st.ncaa); viewBasket(); };
   $('#b-tabs').onclick = (e) => { const b = e.target.closest('[data-t]'); if (b) { st.tab = b.dataset.t; viewBasket(); } };
-  if (st.tab !== 'results') st.tab = 'games';
-  (st.tab === 'results' ? allResults : allGames)(have.filter(inView));
+  if (!['results', 'live'].includes(st.tab)) st.tab = 'games';
+  (st.tab === 'results' ? allResults : st.tab === 'live' ? allLive : allGames)(have.filter(inView));
+  // veri 3 saatten eskiyse arka planda kendiliginden guncellenir (sonuclar ve yaklasan maclar)
+  if (!st.busy && !st.autoAt && Date.now() - oldest > 3 * 3600e3) { st.autoAt = Date.now(); st.busy = true; st.step = 'otomatik';
+    B.downloadAll(httpGet).then(() => { st.cache = {}; }, () => {}).finally(() => { st.busy = false; st.step = ''; if ($('#b-tabs')) viewBasket(); }); }
 }
 function allGames(ls) {
   const now = Date.now(), until = now + 72 * 3600e3, items = [];
@@ -172,6 +176,30 @@ function allGames(ls) {
   $('#b-body').innerHTML = chipsAll() + (shown.length ? `<p class="muted" style="margin:0 4px 10px">Önümüzdeki 3 günde bu seçime uyan ${items.length} maç${items.length > shown.length ? ` (ilk ${shown.length} tanesi gösteriliyor)` : ''}.</p>` + shown.map((g) => card(g.home, g.away, trTime(g.utc), g.neutral, g.M, g.l.name)).join('')
     : `<div class="card"><p class="muted">Önümüzdeki 3 günde bu seçime uyan maç yok. Bölgeyi “Hepsi” yapın, eşiği düşürün ya da “Bütün ligleri güncelle”ye dokunun.</p></div>`);
   bindChips(() => allGames(ls));
+}
+/* ---------------- canli skorlar ---------------- */
+let liveTimer = null;
+function allLive(ls) {
+  const ids = new Set(ls.map((l) => l.id)), L = st.live;
+  const pred = (g) => { const M = B.loadLeague(g.lg) ? modelOf(g.lg, false) : null; if (!M) return null; const p = B.predict(M, g.h, g.a, 0); return p.known ? p : null; };
+  const show = L ? L.list.filter((g) => ids.has(g.lg) || !B.loadLeague(g.lg)).filter((g) => st.ncaa || !/^ncaa/.test(g.lg)) : [];
+  const row = (g) => { const p = pred(g), fav = p ? (p.pHome >= 0.5 ? 'h' : 'a') : null, conf = p ? Math.max(p.pHome, 1 - p.pHome) : 0;
+    const lead = g.hs === g.as ? null : g.hs > g.as ? 'h' : 'a', ok = fav && lead ? fav === lead : null;
+    return `<div class="res"><span class="mark ${g.state === 'pre' ? '' : ok ? 'ok' : ok === false ? 'no' : ''}">${g.state === 'in' ? '●' : g.state === 'post' ? (ok ? '✓' : ok === false ? '✗' : '–') : ''}</span><div class="grow"><span class="lgtag">${esc(g.lgName)}</span>
+      <b>${esc(g.a)} ${g.state === 'pre' ? '' : g.as} – ${g.state === 'pre' ? '' : g.hs} ${esc(g.h)}</b>
+      <div class="muted">${g.state === 'pre' ? trTime(new Date(g.t).toISOString()) : esc(g.clock)}${p ? ` · tahmin: ${esc(fav === 'h' ? g.h : g.a)} ${pct(conf, 0)}${g.state !== 'pre' && ok != null ? (g.state === 'in' ? (ok ? ' · şu an önde' : ' · şu an geride') : '') : ''}` : ''}</div></div></div>`; };
+  const grp = (title, arr) => (arr.length ? `<div class="card"><h2>${title} <span class="tag">${arr.length} maç</span></h2>${arr.map(row).join('')}</div>` : '');
+  $('#b-body').innerHTML = !L ? '<div class="card muted">Canlı skorlar alınıyor…</div>'
+    : (grp('● Şu an oynanıyor', show.filter((g) => g.state === 'in')) + grp('Bugün başlayacak', show.filter((g) => g.state === 'pre')) + grp('Biten (son saatler)', show.filter((g) => g.state === 'post').reverse())
+      || '<div class="card muted">Şu an canlı ya da yakın zamanda maç yok.</div>')
+      + `<p class="muted" style="margin:0 4px 12px">Son yenileme ${new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(L.at))} · ekran açıkken 30 saniyede bir yenilenir. Kaynak: ESPN, EuroLeague. BSL, BCL ve FIBA Europe Cup için canlı kaynak yok; sonuçları günlük verilerle gelir.${L.errs.length ? ` Alınamayan: ${esc(L.errs.join(', '))}.` : ''}</p>`;
+  const tick = async () => {
+    if (st.tab !== 'live' || !$('#b-tabs')) { clearInterval(liveTimer); liveTimer = null; return; }
+    if (st.liveBusy) return; st.liveBusy = true;
+    try { st.live = await fetchLive(httpGet, { ncaa: st.ncaa }); } catch (e) { /* ag hatasi */ }
+    st.liveBusy = false; if (st.tab === 'live' && $('#b-tabs')) allLive(ls);
+  };
+  if (!liveTimer) { liveTimer = setInterval(tick, 30000); tick(); }
 }
 function chipsAll() {
   return `<div class="card"><h2>Güven eşiği <span class="tag">favoriye verilen olasılık</span></h2>

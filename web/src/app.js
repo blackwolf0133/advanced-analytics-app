@@ -8,7 +8,7 @@ import { viewKombine } from './kombineui.js';
 import * as AI from './aiui.js';
 import { onHttp } from './net.js';
 
-const VERSION = '0.10.0';
+const VERSION = '0.11.0';
 const st = { view: 'roulette', db: null, lastPred: undefined, armed: null, cap: 'off' };
 const TITLES = { roulette: 'Rulet', football: 'Futbol', basket: 'Basketbol', kombine: 'Kombine', settings: 'Ayarlar' };
 

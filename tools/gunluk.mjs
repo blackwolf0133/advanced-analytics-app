@@ -23,10 +23,15 @@ const legRule = (mk) => {
   const L = marketLegs({ ms: [2, 3, 4], cs: [1.2, 1.3, 1.4], kg: [1.8, 1.9], ou: { [mk.replace(/^I?[AU]/, '')]: [1.9, 1.9] }, iou: { [mk.replace(/^I?[AU]/, '')]: [1.9, 1.9] } });
   return L.find((l) => l.mk === mk);
 };
-const SPECIAL = { G6: { hit: (h, a) => h + a >= 6, ht: false }, KK2: { hit: (h, a, h1, a1) => h1 > 0 && a1 > 0 && h - h1 > 0 && a - a1 > 0, ht: true } };
+const SPECIAL = {
+  G6: { key: 'g6', hit: (h, a) => h + a >= 6, ht: false, odd: (od) => od.tg?.[3] },
+  KK2: { key: 'kk2', hit: (h, a, h1, a1) => h1 > 0 && a1 > 0 && h - h1 > 0 && a - a1 > 0, ht: true, odd: (od) => od.kk2?.[0] },
+  'U3.5': { key: 'u35', hit: (h, a) => h + a >= 4, ht: false, odd: (od) => od.ou?.['3.5']?.[1] },
+  KGV: { key: 'kgv', hit: (h, a) => h > 0 && a > 0, ht: false, odd: (od) => od.kg?.[0] },
+};
 
 /** Kombine: 2-3 secim, farkli maclar, toplam oran [lo, hi], MBS kurali; tutma olasiligi en yuksek olan. */
-export function bestCombo(legs, lo = 1.35, hi = 1.45) {
+export function bestCombo(legs, lo = 1.35, hi = 1.45, minLegs = 2) {
   const C = legs.filter((l) => l.odd >= 1.08 && l.odd <= hi && l.p >= 0.62).sort((a, b) => b.p - a.p).slice(0, 90);
   let best = null;
   const consider = (ls) => {
@@ -35,6 +40,7 @@ export function bestCombo(legs, lo = 1.35, hi = 1.45) {
     const p = ls.reduce((s, l) => s * l.p, 1), ev = p * odds;
     if (!best || p > best.p + 1e-9 || (Math.abs(p - best.p) < 1e-9 && ev > best.ev)) best = { legs: ls, odds, p, ev };
   };
+  if (minLegs <= 1) for (const l of C) consider([l]);
   for (let i = 0; i < C.length; i++) for (let j = i + 1; j < C.length; j++) {
     if (C[i].id === C[j].id) continue; consider([C[i], C[j]]);
     for (let k = j + 1; k < C.length; k++) { if (C[k].id === C[i].id || C[k].id === C[j].id) continue; consider([C[i], C[j], C[k]]); }
@@ -59,7 +65,7 @@ export async function gunluk({ get, pool, readJson, writeJson, NOW, matches, cal
   for (const m of matches) {
     const e = pairs.get(m.id); if (!e) continue;
     m.od = e.od; m.io = e.io;
-    if (m.st === 'pre') hist.ev[m.id] = { t: m.t, lg: m.lg, od: e.od };
+    if (m.st === 'pre') hist.ev[m.id] = { t: m.t, lg: m.lg, od: e.od, od0: hist.ev[m.id]?.od0 || e.od, t0: hist.ev[m.id]?.t0 || NOW.toISOString() };   // od0: ilk gorulen oranlar (oran hareketi)
   }
   for (const [id, h] of Object.entries(hist.ev)) if (Date.parse(h.t) < now - 120 * 864e5) delete hist.ev[id];
   writeJson('f/oran.json', hist);
@@ -70,7 +76,7 @@ export async function gunluk({ get, pool, readJson, writeJson, NOW, matches, cal
   for (const [id, h] of Object.entries(hist.ev)) {
     const sc = res(id); if (!sc) continue;
     for (const l of marketLegs(h.od)) { if (l.ht && sc[2] == null) continue; (samples[l.fam] ||= []).push([l.pm, l.hit(...sc) ? 1 : 0]); }
-    const P = marketProbs(h.od);
+    const P = marketProbs(h.od, leagues[h.lg]?.f);
     for (const [k, S] of Object.entries(SPECIAL)) if (P[k] != null && !(S.ht && sc[2] == null)) (samples[k] ||= []).push([P[k], S.hit(...sc) ? 1 : 0]);
   }
   const mcal = {}; for (const [k, s] of Object.entries(samples)) mcal[k] = { n: s.length, knots: s.length >= 400 ? isotonic(s, 50) : null };
@@ -82,32 +88,35 @@ export async function gunluk({ get, pool, readJson, writeJson, NOW, matches, cal
   const upcoming = matches.filter((m) => m.od && m.st === 'pre' && istDay(m.t) === today && Date.parse(m.t) > now + 20 * 6e4 && !leagues[m.lg]?.nat);
   // listeler kurulacaksa: aday maclarin butun pazarlari (iki yarida KG ve 2. yari KG yalnizca mac detayinda var)
   if ((!day.g6 || !day.kk2) && upcoming.length && pool) {
-    const score = (m) => { const P0 = marketProbs(m.od); return Math.max(P0.G6 || 0, (P0.KK2 || 0) * 1.5, (P0['U2.5'] || 0) * 0.2); };
+    const score = (m) => { const P0 = marketProbs(m.od, leagues[m.lg]?.f); return Math.max(P0.G6 || 0, (P0.KK2 || 0) * 1.5, (P0['U2.5'] || 0) * 0.2); };
     const cand = upcoming.slice().sort((x, y) => score(y) - score(x)).slice(0, 45);
     const det = await pool(cand, 4, async (m) => { try { const j = await get(IDDAA_EVENT(m.io)); return j?.data ? [m, parseIddaa(j.data)] : null; } catch { return null; } });
-    let n = 0; for (const x of det) { if (!x) continue; const [m, d] = x; m.od = { ...m.od, ...d.od }; hist.ev[m.id] = { t: m.t, lg: m.lg, od: m.od }; n++; }
+    let n = 0; for (const x of det) { if (!x) continue; const [m, d] = x; m.od = { ...m.od, ...d.od }; if (hist.ev[m.id]) hist.ev[m.id].od = m.od; n++; }
     writeJson('f/oran.json', hist); console.log(`gunluk: ${n} mac detayi alindi`);
   }
   if (!day.combo && upcoming.length) {
     const legs = [];
     for (const m of upcoming) {
       const model = m.pr ? Object.fromEntries(footLegs({ ...m, f: leagues[m.lg]?.f }, cal).map((l) => [l.mk, l.q])) : {};
+      const L0 = hist.ev[m.id]?.od0 ? marketLegs(hist.ev[m.id].od0) : [];
       for (const l of marketLegs(m.od)) {
+        const l0 = L0.find((x) => x.mk === l.mk);
         const pm = P(l.fam, l.pm), q = model[MODEL_KEY[l.mk]] ?? null;
         if (l.ht && !htLeague.get(m.lg)) continue;
         if (q != null && q < pm - 0.08) continue;                       // model acikca karsi cikiyorsa alinmaz
         const p = q != null ? 0.75 * pm + 0.25 * q : pm;
-        legs.push({ id: m.id, io: m.io, t: m.t, lg: m.lg, ln: leagues[m.lg]?.name, h: m.h, a: m.a, mk: l.mk, label: l.label, odd: l.odd, mbs: m.od && (iddaa.find((e) => e.io === m.io)?.mb?.[l.mbKey] ?? 3), pm: r3(pm), q: r3(q), p: r3(p) });
+        legs.push({ id: m.id, io: m.io, t: m.t, lg: m.lg, ln: leagues[m.lg]?.name, h: m.h, a: m.a, mk: l.mk, label: l.label, odd: l.odd, mbs: m.od && (iddaa.find((e) => e.io === m.io)?.mb?.[l.mbKey] ?? 3), pm: r3(pm), q: r3(q), p: r3(p), mv: l0 ? r3(l.odd / l0.odd - 1) : null });
       }
     }
     const b = bestCombo(legs);
     if (b) { day.combo = { built: NOW.toISOString(), odds: r3(b.odds), p: r3(b.p), legs: b.legs.map((l) => ({ ...l, res: null })) }; console.log('gunluk kombine:', JSON.stringify(day.combo)); }
   }
-  for (const [k, key] of [['G6', 'g6'], ['KK2', 'kk2']]) {
-    if (day[key] || !upcoming.length) continue;
-    const L = upcoming.filter((m) => !(SPECIAL[k].ht && !htLeague.get(m.lg))).map((m) => { const pr = marketProbs(m.od); if (pr[k] == null) return null;
-      const odd = k === 'G6' ? m.od.tg?.[3] ?? null : m.od.kk2?.[0] ?? null;
-      return { id: m.id, t: m.t, lg: m.lg, ln: leagues[m.lg]?.name, h: m.h, a: m.a, p: r3(P(k, pr[k])), raw: r3(pr[k]), odd, res: null }; }).filter(Boolean).sort((x, y) => y.p - x.p).slice(0, 10);
+  const move = (m) => { const a = hist.ev[m.id]?.od0?.ou?.['2.5']?.[1], b = m.od?.ou?.['2.5']?.[1]; return a && b ? r3(b / a - 1) : null; };   // 2,5 ust oraninin ilk gorulenden degisimi
+  for (const [k, S] of Object.entries(SPECIAL)) {
+    const key = S.key; if (day[key] || !upcoming.length) continue;
+    const L = upcoming.filter((m) => !(S.ht && !htLeague.get(m.lg))).map((m) => { const pr = marketProbs(m.od, leagues[m.lg]?.f); if (pr[k] == null) return null;
+      return { id: m.id, t: m.t, lg: m.lg, ln: leagues[m.lg]?.name, h: m.h, a: m.a, p: r3(P(k, pr[k])), pm: r3(pr[k + 'm'] ?? null), pd: r3(pr[k + 'd'] ?? null), odd: S.odd(m.od) ?? null, mv: move(m), res: null }; })
+      .filter(Boolean).sort((x, y) => y.p - x.p).slice(0, 10);
     if (L.length >= 7) day[key] = { built: NOW.toISOString(), legs: L };
   }
 
@@ -124,7 +133,7 @@ export async function gunluk({ get, pool, readJson, writeJson, NOW, matches, cal
     };
     if (d.combo) { for (const l of d.combo.legs) { const R = legRule(l.mk); settle(l, R.hit, R.ht); }
       const rs = d.combo.legs.map((l) => l.res); d.combo.res = rs.includes('L') ? 'L' : rs.every((r) => r === 'W' || r === 'V') ? (rs.every((r) => r === 'V') ? 'V' : 'W') : null; }
-    for (const [k, key] of [['G6', 'g6'], ['KK2', 'kk2']]) if (d[key]) { for (const l of d[key].legs) settle(l, SPECIAL[k].hit, SPECIAL[k].ht);
+    for (const [k, S] of Object.entries(SPECIAL)) { const key = S.key; if (!d[key]) continue; for (const l of d[key].legs) settle(l, S.hit, S.ht);
       const top = d[key].legs.slice(0, 7); d[key].hits = top.filter((l) => l.res === 'W').length; d[key].done = top.every((l) => l.res); d[key].exp = r3(top.reduce((s, l) => s + l.p, 0)); }
   }
   for (const d of Object.keys(store.days)) if (d < istDay(new Date(now - 45 * 864e5).toISOString())) delete store.days[d];
@@ -133,7 +142,7 @@ export async function gunluk({ get, pool, readJson, writeJson, NOW, matches, cal
   let streak = 0; for (let i = done.length - 1; i >= 0 && done[i].res === 'W'; i--) streak++;
   let best = 0, run = 0; for (const c of done) { run = c.res === 'W' ? run + 1 : 0; best = Math.max(best, run); }
   const lists = (key) => { const L = ds.map((d) => store.days[d][key]).filter((x) => x && x.done); return { days: L.length, hits: L.reduce((s, x) => s + x.hits, 0), exp: r3(L.reduce((s, x) => s + x.exp, 0)) }; };
-  store.sum = { combo: { days: done.length, won: done.filter((c) => c.res === 'W').length, exp: r3(done.reduce((s, c) => s + c.p, 0)), streak, best }, g6: lists('g6'), kk2: lists('kk2') };
+  store.sum = { combo: { days: done.length, won: done.filter((c) => c.res === 'W').length, exp: r3(done.reduce((s, c) => s + c.p, 0)), streak, best }, g6: lists('g6'), kk2: lists('kk2'), u35: lists('u35'), kgv: lists('kgv') };
   store.cal = Object.fromEntries(Object.entries(mcal).map(([k, o]) => [k, { n: o.n, on: !!o.knots }]));
   store.updated = NOW.toISOString();
   writeJson('f/gunluk.json', store);

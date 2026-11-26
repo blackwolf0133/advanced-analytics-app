@@ -5,7 +5,9 @@ HERE = pathlib.Path(__file__).parent; WWW = HERE.resolve().parents[1] / "app/src
 G = json.loads((HERE / "fixtures/veri_gun.json").read_text()); now = dt.datetime.now(dt.timezone.utc); up = dt.datetime.fromisoformat(G["updated"].replace("Z", "+00:00"))
 for m in G["matches"]: m["t"] = (now + (dt.datetime.fromisoformat(m["t"].replace("Z", "+00:00")) - up)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 G["updated"] = now.strftime("%Y-%m-%dT%H:%M:%S.000Z")
-D = (HERE / "fixtures/veri_gunluk.json").read_text()
+_D = json.loads((HERE / "fixtures/veri_gunluk.json").read_text()); _ist = dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=3)
+_ks = sorted(_D["days"]); _D["days"] = {(_ist - dt.timedelta(days=len(_ks) - 1 - i)).strftime("%Y-%m-%d"): _D["days"][k] for i, k in enumerate(_ks)}   # dun / bugun
+D = json.dumps(_D)
 MOCK = "window.__g = %s; window.__d = %s; window.Native = { httpGet: (id, url) => setTimeout(() => { if (url.endsWith('f/gun.json')) return AAD.onHttp(id, 200, window.__g); if (url.endsWith('f/gunluk.json')) return AAD.onHttp(id, 200, window.__d); AAD.onHttp(id, 404, ''); }, 20) };" % (json.dumps(json.dumps(G)), json.dumps(D))
 srv = subprocess.Popen([sys.executable, "-m", "http.server", "8820", "--bind", "127.0.0.1"], cwd=WWW, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); time.sleep(1); errs = []
 try:

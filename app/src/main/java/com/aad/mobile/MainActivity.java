@@ -29,7 +29,7 @@ public class MainActivity extends Activity {
     private static final int REQ_CAPTURE = 41;
     private static final int REQ_NOTIFY = 42;
     /** Uygulamanin veri indirebilecegi adresler. Baska hicbir yere baglanilmaz. */
-    private static final List<String> HOSTS = Arrays.asList("www.football-data.co.uk", "raw.githubusercontent.com", "cdn.jsdelivr.net", "site.api.espn.com", "cdn.espn.com");
+    private static final List<String> HOSTS = Arrays.asList("www.football-data.co.uk", "raw.githubusercontent.com", "cdn.jsdelivr.net", "site.api.espn.com", "cdn.espn.com", "api-live.euroleague.net");
     /** Yapay zeka servisleri: yalnizca bunlara soru (POST) gonderilebilir. Anahtarlar telefonda kalir, baska yere gitmez. */
     private static final List<String> AI_HOSTS = Arrays.asList("oai.endpoints.kepler.ai.cloud.ovh.net", "api.kilo.ai", "api.groq.com", "generativelanguage.googleapis.com", "openrouter.ai");
     private static final int MAX_BODY = 12 * 1024 * 1024;

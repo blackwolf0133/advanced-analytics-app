@@ -9,12 +9,15 @@ const MK = {   // tip_alttip -> kisa ad ; secenek adlari sirasiyla
   '2_720': ['iykg', ['Var', 'Yok']], '2_821': ['y2kg', ['Var', 'Yok']], '2_866': ['kk2', ['Evet / Evet', 'Evet / Hayır', 'Hayır / Evet', 'Hayır / Hayır']], '2_88': ['iy', ['1', '0', '2']],
   '2_101': ['ou', ['Alt', 'Üst']], '2_60': ['iou', ['Alt', 'Üst']], '2_603': ['hou', ['Alt', 'Üst']], '2_604': ['aou', ['Alt', 'Üst']], '2_722': ['hiou', ['Alt', 'Üst']], '2_723': ['aiou', ['Alt', 'Üst']],
 };
-const LINE = new Set(['ou', 'iou', 'hou', 'aou', 'hiou', 'aiou']);
+const LINE = new Set(['ou', 'iou', 'hou', 'aou', 'hiou', 'aiou', 'hcp', 'tot']);
+// basketbol (uzatmalar dahil): mac sonucu, ev sahibine gore handikap, toplam sayi
+export const MK_BASKET = { '1_2': ['ms', ['1', '2']], '2_113': ['hcp', ['1', '2']], '2_114': ['tot', ['Alt', 'Üst']] };
+export const IDDAA_BASKET = 'https://sportsbookv2.iddaa.com/sportsbook/events?st=2&type=0&version=0';
 /** Bulten olayini sade bicime cevirir (olay listesi ya da tek mac detayi): { io, d (ISO), h, a, lg, mbs, od: { ms:[..], ou:{ '2.5': [alt, ust] }, ... }, mb: { pazar: mbs } } */
-export function parseIddaa(ev, comps = new Map()) {
+export function parseIddaa(ev, comps = new Map(), map = MK) {
   const od = {}, mb = {};
   for (const m of ev.m || []) {
-    const def = MK[`${m.t}_${m.st}`]; if (!def || m.s === 0) continue;
+    const def = map[`${m.t}_${m.st}`]; if (!def || m.s === 0) continue;
     const [k, names] = def, by = new Map((m.o || []).map((o) => [String(o.n).trim(), o.odd]));
     const vals = names.map((n) => by.get(n));
     if (vals.some((v) => !(v > 1))) continue;
@@ -54,23 +57,57 @@ function lambdaOf(lines) {
   for (const [ln, v] of Object.entries(lines)) { const f = fair(v); if (!f) continue; const l = lambdaFromLine(ln, f[0]); if (l == null) continue; const wt = 0.05 + f[0] * f[1]; s += l * wt; w += wt; }
   return w ? s / w : null;
 }
+const pois = (l) => { const a = [Math.exp(-l)]; for (let k = 1; k < 13; k++) a.push((a[k - 1] * l) / k); return a; };
+/** Toplam gol ortalamasini 1X2 olasiliklarina gore ev/deplasman diye boler (goalmodel / penaltyblog yontemi, Poisson). */
+export function splitLambda(lt, ph, pa) {
+  let lo = 0.02, hi = 0.98;
+  for (let it = 0; it < 40; it++) {
+    const r = (lo + hi) / 2, A = pois(lt * r), B = pois(lt * (1 - r)); let d = 0;
+    for (let i = 0; i < 13; i++) for (let j = 0; j < 13; j++) if (i !== j) d += (i > j ? 1 : -1) * A[i] * B[j];
+    if (d < ph - pa) lo = r; else hi = r;
+  }
+  const r = (lo + hi) / 2; return [lt * r, lt * (1 - r)];
+}
+const logit = (p) => Math.log(Math.min(0.999, Math.max(0.001, p)) / (1 - Math.min(0.999, Math.max(0.001, p))));
+const expit = (z) => 1 / (1 + Math.exp(-z));
 /**
- * Oranlardan pazar olasiliklari (marji temizlenmis): 1X2, cifte sans, KG, toplam gol araligi, 6+ gol,
- * iki yarida da karsilikli gol (dogrudan pazar yoksa takim ve ilk yari gol cizgilerinden).
+ * Oranlardan pazar olasiliklari (marji temizlenmis): 1X2, cifte sans, KG, alt/ust, 6+ gol, iki yarida KG.
+ * 6+ gol ve iki yarida KG iki yoldan hesaplanip birlestirilir:
+ *  - dogrudan: bultendeki "Toplam Gol 6+" ve "1. ve 2. Yarida KG" oranlari
+ *  - cizgilerden: alt/ust cizgilerinden toplam gol ortalamasi, 1X2'den takimlara bolunur, ligin ilk yari gol payiyla yarilara (Poisson).
+ *    Bu yol 41.373 maclik arsivde (football-data, Pinnacle kapanis oranlari, 22 lig, 2021-2026) olculdu ve kalibre cikti.
+ * f: ligin ilk yari gol payi (yoksa 0,443).
  */
-export function marketProbs(od) {
+export function marketProbs(od, f = 0.443) {
   const P = {};
-  if (od.ms) { const f = fair(od.ms); P['1'] = f[0]; P.X = f[1]; P['2'] = f[2]; P['1X'] = f[0] + f[1]; P['12'] = f[0] + f[2]; P.X2 = f[1] + f[2]; }
-  if (od.kg) { const f = fair(od.kg); P.KGV = f[0]; P.KGY = f[1]; }
-  if (od.ou) for (const [ln, v] of Object.entries(od.ou)) { const f = fair(v); P[`A${ln}`] = f[0]; P[`U${ln}`] = f[1]; }
-  if (od.iou) for (const [ln, v] of Object.entries(od.iou)) { const f = fair(v); P[`IA${ln}`] = f[0]; P[`IU${ln}`] = f[1]; }
-  if (od.tg) { const f = fair(od.tg); P.G6 = f[3]; P.tg = f; }
-  const lh = lambdaOf(od.hou), la = lambdaOf(od.aou), lh1 = lambdaOf(od.hiou), la1 = lambdaOf(od.aiou), sc = (l) => 1 - Math.exp(-Math.max(0.02, l));
-  if (lh != null && la != null) P.xg = [lh, la];
-  let p1 = od.iykg ? fair(od.iykg)[0] : lh1 != null && la1 != null ? sc(lh1) * sc(la1) : null, p2 = od.y2kg ? fair(od.y2kg)[0] : null;
-  if (p2 == null && lh != null && la != null && lh1 != null && la1 != null) p2 = sc(lh - lh1) * sc(la - la1);
-  if (od.kk2) P.KK2 = fair(od.kk2)[0]; else if (p1 != null && p2 != null) P.KK2 = p1 * p2;
-  if (P.G6 == null) { const lt = lambdaOf(od.ou); if (lt != null) P.G6 = 1 - pLE(lt, 5); }
+  if (od.ms) { const g = fair(od.ms); P['1'] = g[0]; P.X = g[1]; P['2'] = g[2]; P['1X'] = g[0] + g[1]; P['12'] = g[0] + g[2]; P.X2 = g[1] + g[2]; }
+  if (od.kg) { const g = fair(od.kg); P.KGV = g[0]; P.KGY = g[1]; }
+  if (od.ou) for (const [ln, v] of Object.entries(od.ou)) { const g = fair(v); P[`A${ln}`] = g[0]; P[`U${ln}`] = g[1]; }
+  if (od.iou) for (const [ln, v] of Object.entries(od.iou)) { const g = fair(v); P[`IA${ln}`] = g[0]; P[`IU${ln}`] = g[1]; }
+  const sc = (l) => 1 - Math.exp(-Math.max(0.02, l));
+  // cizgilerden turetilen
+  const lt = lambdaOf(od.ou);
+  if (lt != null) {
+    P.lt = lt; const G = pois(lt); P.G6d = 1 - G.slice(0, 6).reduce((a, b) => a + b, 0); P.U35d = 1 - G.slice(0, 4).reduce((a, b) => a + b, 0);
+    if (od.ms) {
+      const [lh, la] = splitLambda(lt, P['1'], P['2']); P.xg = [lh, la];
+      P.KK2d = sc(lh * f) * sc(la * f) * sc(lh * (1 - f)) * sc(la * (1 - f)); P.KGVd = sc(lh) * sc(la);
+    }
+  }
+  // dogrudan pazarlar
+  if (od.tg) { const g = fair(od.tg); P.G6m = g[3]; P.tg = g; }
+  if (od.kk2) P.KK2m = fair(od.kk2)[0];
+  else {
+    const lh = lambdaOf(od.hou), la = lambdaOf(od.aou), lh1 = lambdaOf(od.hiou), la1 = lambdaOf(od.aiou);
+    const p1 = od.iykg ? fair(od.iykg)[0] : lh1 != null && la1 != null ? sc(lh1) * sc(la1) : null;
+    let p2 = od.y2kg ? fair(od.y2kg)[0] : null;
+    if (p2 == null && lh != null && la != null && lh1 != null && la1 != null) p2 = sc(lh - lh1) * sc(la - la1);
+    if (p1 != null && p2 != null) P.KK2m = p1 * p2;
+  }
+  const mix = (a, b) => (a != null && b != null ? expit((logit(a) + logit(b)) / 2) : a ?? b ?? null);
+  P.G6 = mix(P.G6m, P.G6d); P.KK2 = mix(P.KK2m, P.KK2d);
+  if (P['U3.5'] == null && P.U35d != null) P['U3.5'] = P.U35d;
+  if (P.KGV == null && P.KGVd != null) P.KGV = P.KGVd;
   return P;
 }
 
