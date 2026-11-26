@@ -69,8 +69,8 @@ export function dailyHtml(busy) {
   parts.push(basketPart(today, yest));
   const LISTS = [['g6', '6+ gol listesi', 'gol6', 'Maçta 6 ya da daha fazla gol. İki yol birleştirilir: iddaa\'nın “Toplam Gol 6+” oranı ve alt/üst + 1X2 çizgilerinden hesaplanan gol beklentisi. Sıradan bir maçta %6.'],
     ['kk2', 'İki yarıda karşılıklı gol', 'kk2', 'İlk yarıda da ikinci yarıda da iki takım gol atar. İddaa\'nın “1. ve 2. Yarıda KG” oranı ile çizgilerden hesaplanan değer birleştirilir. Sıradan bir maçta %5.'],
-    ['u35', '3,5 Üst listesi (4+ gol)', 'u35', 'Daha gerçekçi gol listesi: maçta en az 4 gol. Listedeki maçlarda ihtimal genelde %55–70.'],
-    ['kgv', 'KG Var listesi', 'kgv', 'Daha gerçekçi gol listesi: iki takım da gol atar. Listedeki maçlarda ihtimal genelde %60–70.']];
+    ['u35', '3,5 Üst listesi (4+ gol)', 'u35', 'Daha gerçekçi gol listesi: maçta en az 4 gol. Listedeki maçlarda ihtimal genelde %45–60.'],
+    ['kgv', 'KG Var listesi', 'kgv', 'Daha gerçekçi gol listesi: iki takım da gol atar. Listedeki maçlarda ihtimal genelde %60–67.']];
   if (Y && (Y.combo || Y.g6 || Y.kk2)) {
     parts.push(`<h3 style="margin:14px 4px 8px">Dünün sonuçları · ${dm(yest)}</h3>`);
     if (Y.combo) parts.push(comboCard(Y.combo, 'Dünün kombinesi'));
