@@ -17,7 +17,7 @@ export const leagues = () => (loadIndex()?.basket || FALLBACK_LEAGUES.map(([id, 
 export async function download(get, id) {
   const idx = await first(get, 'index.json'); write('bb_index', { ...idx, fetched: Date.now() });
   const f = await first(get, `b/${id}.json`); if (!f.seasons) throw new Error('dosya beklenen biçimde değil');
-  write('bb_' + id, { ...f, fetched: Date.now() });
+  write('bb_' + id, { ...f, fetched: Date.now() }); await downloadLines(get);
   return { n: Object.values(f.seasons).reduce((s, l) => s + l.length, 0), seasons: Object.keys(f.seasons).map(Number), updated: f.updated };
 }
 /** Butun ligler: once lig listesi, sonra her ligin dosyasi (toplam ~1,5 MB). Bir lig alinamazsa digerleri yine iner. */
@@ -29,8 +29,13 @@ export async function downloadAll(get, onStep = () => {}) {
     try { const f = await first(get, `b/${l.id}.json`); if (!f.seasons) throw new Error('biçim'); write('bb_' + l.id, { ...f, fetched: Date.now() }); ok.push(l.id); }
     catch (e) { bad.push(`${l.name}: ${e.message}`); }
   }
+  await downloadLines(get);
   return { ok, bad };
 }
+/** iddaa barajlari (veri hattinin saatlik b/oran.json dosyasi): toplam sayi, handikap, mac sonucu. */
+export const loadLines = () => read('bb_oran', null);
+export async function downloadLines(get) { try { const j = await first(get, 'b/oran.json'); if (j.g) write('bb_oran', { ...j, fetched: Date.now() }); } catch (e) { /* dosya henuz yok */ } }
+export const phi = R.phi;
 /** Hizli model (yalnizca bugunku guc puanlari; gecmis test yok): butun liglerin yaklasan maclari icin. */
 export function buildLite(db) {
   const games = allGames(db); if (!games.length) return null;

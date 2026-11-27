@@ -46,6 +46,14 @@ try:
         pg.select_option("#f-div", "milli"); pg.click("#f-dl"); pg.wait_for_selector("#f-tabs", timeout=30000); t = pg.inner_text("#main"); print("milli:", t[:80].replace("\n", " ")); assert "4098 maç · 2023–2026" in t
         pg.click('[data-t="week"]'); cards = pg.inner_text("#f-body"); assert "UEFA Nations League" in cards and "tarafsız saha" in cards, cards[:400]; pg.screenshot(path="/tmp/phone_milli.png")
         pg.click('[data-t="table"]'); assert pg.locator("#f-body tbody tr").count() == 80 and "Güç sıralaması" in pg.inner_text("#f-body")
+        # Hepsi: butun ligler tek dokunusla, yaklasan maclar tek listede
+        pg.select_option("#f-div", "ALL"); pg.wait_for_selector("#fa-dl"); pg.click("#fa-dl")
+        pg.wait_for_function("document.querySelector('#toast').textContent.includes('lig indirildi')", timeout=60000); print("hepsi:", pg.inner_text("#toast"))
+        pg.wait_for_selector("#fa-w"); pg.click('#fa-w [data-w="3"]'); pg.wait_for_selector("#fa-list .fm", timeout=15000)
+        t = pg.inner_text("#fa-list"); print("hepsi liste:", t[:300].replace("\n", " | ")); assert "SPANYA" in t and pg.locator("#fa-list .fm").count() >= 2
+        pg.screenshot(path="/tmp/phone_fb_all.png")
+        pg.click('#nav [data-v="basket"]'); pg.click('#nav [data-v="football"]'); assert pg.input_value("#f-div") == "ALL"
+        pg.click('#fa-list .lgtag[data-lg="SP1"] >> nth=0'); pg.wait_for_selector("#f-tabs", timeout=10000); assert pg.input_value("#f-div") == "SP1"
         print("hatalar:", errs); b.close()
 finally:
     srv.terminate()

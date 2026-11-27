@@ -79,6 +79,22 @@ export function bestTier(legs, T) {
   return best && { odds: best.odds, p: best.p, legs: best.legs };
 }
 
+/** Yaklasan maclarin iddaa barajlari (toplam sayi, handikap, mac sonucu) ve lig toplam sapmasi: telefon kartlarinda "ust mu alt mi" icin. */
+export function barajlar({ iddaa, dbs, now, writeJson, NOW }) {
+  const games = []; for (const [id, db] of dbs) for (const [utc, h, a, neu] of db.upcoming || []) { const t = Date.parse(utc); if (t > now - 3 * 36e5 && t < now + 3 * 864e5) games.push({ id: `${id}|${utc}|${h}`, lg: id, t: utc, h, a, neu }); }
+  const pairs = matchEvents(games, iddaa), g = {}, ts = {};
+  const main = (o) => { let best = null; for (const [line, v] of Object.entries(o || {})) { const d = Math.abs(Math.log(v[0] / v[1])); if (!best || d < best[0]) best = [d, Number(line), v]; } return best && [best[1], ...best[2]]; };
+  for (const x of games) {
+    const e = pairs.get(x.id); if (!e) continue;
+    const tot = main(e.od.tot), hcp = main(e.od.hcp), r = {};
+    if (tot) { r.tot = tot; r.pu = r3(fair([tot[1], tot[2]])[1]); }
+    if (hcp) r.hcp = hcp; if (e.od.ms) r.ms = e.od.ms;
+    if (Object.keys(r).length) { g[x.id] = r; if (!(x.lg in ts)) { const M = model(dbs.get(x.lg)); ts[x.lg] = M ? r3(M.tsig) : null; } }
+  }
+  writeJson('b/oran.json', { v: 2, updated: NOW.toISOString(), g, ts });
+  console.log(`gunluk basket: baraj ${Object.keys(g).length} mac`);
+}
+
 export async function gunlukBasket({ get, pool, readJson, writeJson, NOW, index, per }) {
   const V = 2, now = NOW.getTime(), today = istDay(now);
   const G = readJson('b/gunluk.json', null), store = G && G.v === V ? G : { v: V, days: {} };
@@ -88,9 +104,8 @@ export async function gunlukBasket({ get, pool, readJson, writeJson, NOW, index,
   for (const k of Object.keys(TIERS)) if (day[k] && day[k].rv !== RV && day[k].legs.every((l) => Date.parse(l.t) > now + 20 * 6e4)) delete day[k];   // kural degisti, hicbir mac baslamadi: yeniden kur
   const early = new Date(now + 3 * 36e5).getUTCHours() < 7;
   const need = Object.keys(TIERS).some((k) => !day[k]) && !early;
-  const pending = Object.values(store.days).some((d) => Object.keys(TIERS).some((k) => d[k]?.legs.some((l) => Date.parse(l.t) > now)));
   let iddaa = [];
-  if (need || pending) {
+  {   // her calismada: bulten ayrica b/oran.json'a (telefondaki maç kartlarinda toplam sayi barajı) yazilir
     try { const [j, c] = await Promise.all([get(IDDAA_BASKET), get(IDDAA_COMP)]); const comps = new Map((c?.data || []).map((x) => [x.i, x.n]));
       iddaa = (j?.data?.events || []).filter((e) => e.d * 1000 > now + 5 * 6e4).map((e) => parseIddaa(e, comps, MK_BASKET)).filter((e) => e.od.ms); } catch (e) { console.warn('gunluk basket: iddaa', e.message); }
   }
@@ -100,6 +115,7 @@ export async function gunlukBasket({ get, pool, readJson, writeJson, NOW, index,
     if (Date.parse(l.t) <= now) continue; const e = byIo.get(l.io); if (!e) continue;
     const o = legsOf(e, { h: l.h, a: l.a, neu: 0 }, null, per?.st?.[l.lg]).find((x) => x.mk === l.mk)?.odd; if (o > 1) { l.close = o; l.closeAt = NOW.toISOString().slice(0, 16); }
   }
+  try { barajlar({ iddaa, dbs, now, writeJson, NOW }); } catch (e) { console.warn('gunluk basket: baraj', e.message); }
   if (need) {
     // aday maclar: bugun (Turkiye saati) baslayip yarin sabah 10:00'a kadar
     const until = Date.parse(today + 'T07:00:00Z') + 864e5, games = [];

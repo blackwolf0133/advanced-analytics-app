@@ -12,13 +12,18 @@ try:
     with sync_playwright() as p:
         b = p.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox"]); pg = b.new_context(viewport={"width": 390, "height": 860}, device_scale_factor=2).new_page()
         pg.on("pageerror", lambda e: errs.append(str(e))); pg.add_init_script(MOCK); pg.goto("http://127.0.0.1:8823/index.html")
-        pg.click('#nav [data-v="kombine"]'); pg.click('#k-top [data-top="para"]'); pg.wait_for_selector(".pmk", timeout=15000)
-        t = pg.inner_text("#k-para"); print(t[:1400])
-        assert "💰" in t and "az sayıda ama büyük bahis" in t and "para payı" in t and "1/1" in t and pg.locator(".prow.big").count() >= 4
-        first = pg.inner_text("#k-para .card >> nth=2"); assert "Utah Jazz" in first, first      # en buyuk para farki (34 puan) ustte
-        pg.click('#pa-sp [data-s="soccer"]'); pg.wait_for_timeout(200); assert "NBA" not in pg.inner_text("#k-para").split("Saate göre")[1].split("Kaynak:")[0]
-        pg.screenshot(path="/tmp/para.png", full_page=True)
-        pg.click('#k-top [data-top="daily"]'); pg.wait_for_selector("#k-sport", timeout=10000); b.close()
+        pg.click('#nav [data-v="kombine"]'); pg.click('#ksec [data-sec="para"]'); pg.wait_for_selector(".pa-g", timeout=15000)
+        t = pg.inner_text("#k-para"); print(t[:1600])
+        assert "💰" in t and "Büyük para:" in t and "paranın %" in t and "1/1" in t
+        first = pg.inner_text("#k-para .pa-g >> nth=0"); assert "Utah Jazz" in first, first      # en buyuk para farki (34 puan) ustte
+        assert pg.locator(".pa-leg .on").count() >= 3
+        # bos (0/0) handikap pazari gosterilmez; buyuk yuvarlak (rulet .big) sinifi kullanilmaz
+        assert pg.locator("#k-para .big").count() == 0
+        pg.screenshot(path="/tmp/para.png", full_page=True); pg.locator(".pa-g").nth(0).screenshot(path="/tmp/para_g0.png"); pg.locator(".pa-g").nth(1).screenshot(path="/tmp/para_g1.png")
+        pg.click('#pa-v [data-v="all"]'); pg.wait_for_timeout(200); n_all = pg.locator(".pa-g").count()
+        pg.click('#pa-sp [data-s="soccer"]'); pg.wait_for_timeout(200); assert "NBA" not in " ".join(pg.locator(".pa-g").all_inner_texts())
+        assert pg.locator(".pa-g").count() < n_all
+        b.close()
 finally:
     srv.terminate()
 print("hatalar:", errs); assert not errs

@@ -36,6 +36,7 @@ function leagueSelect() {
 }
 export function viewBasket(toast) {
   if (toast) st.toast = toast; reload();
+  if (!st.linesAt && Date.now() - (B.loadLines()?.fetched || 0) > 60 * 6e4) { st.linesAt = Date.now(); B.downloadLines(httpGet).then(() => { if ($('#b-body') && B.loadLines()) viewBasket(); }); }
   if (st.id === ALL) { viewAll(); return; }
   const db = st.db, n = db ? B.allGames(db).length : 0, ys = db ? Object.keys(db.seasons).map(Number).sort() : [], meta = B.leagues().find((l) => l.id === st.id) || { name: st.id };
   const age = db ? (Date.now() - Date.parse(db.updated)) / 864e5 : 0;
@@ -65,14 +66,24 @@ function confNote(p, ev = st.ev) {
   const b = ev?.buckets.find((x) => p >= x.lo && p < x.hi);
   return b && b.n >= 20 ? `Geçmiş testte bu güven aralığındaki (${pct(b.lo, 0)}–${pct(Math.min(1, b.hi), 0)}) ${b.n} tahminin ${pct(b.rate)}’i tuttu.` : '';
 }
-function card(home, away, when, neutral = 0, M = st.model, league = '') {
-  const p = B.predict(M, home, away, neutral), ph = p.pHome, pick = ph >= 0.5 ? home : away, conf = Math.max(ph, 1 - ph);
+/** Beklenen toplam, iddaa'nin toplam sayi barajinin ustunde mi altinda mi. */
+function totalLine(p, key) {
+  const O = B.loadLines(), x = key && O?.g?.[key]; if (!x?.tot) return { tile: '', text: '' };
+  const [L, oA, oU] = x.tot, d = p.total - L, lg = key.split('|')[0], sd = O.ts?.[lg] || 18, pu = 1 - B.phi((L - p.total) / sd);
+  const side = Math.abs(d) < 1.5 ? null : d > 0 ? 'ÜST' : 'ALT', cls = side === 'ÜST' ? 'hit' : side === 'ALT' ? 'miss' : '';
+  const tile = `<span class="tline">baraj ${num(L)} · <b class="${cls}">${side ? `${side} ${d > 0 ? '+' : '−'}${num(Math.abs(d))}` : 'barajda'}</b></span>`;
+  const mp = side === 'ALT' ? 1 - pu : pu, mk = x.pu != null ? (side === 'ALT' ? 1 - x.pu : x.pu) : null;
+  const text = `<br>Toplam sayı: iddaa barajı <b>${num(L)}</b> (Alt ${num(oA, 2)} / Üst ${num(oU, 2)}). Model ${num(p.total)} bekliyor → ${side ? `<b class="${cls}">${side}</b> tarafı, model olasılığı ${pct(mp, 0)}${mk != null ? ` · iddaa ${pct(mk, 0)}` : ''}${Math.abs(mp - 0.5) < 0.06 ? ' (fark küçük, güçlü sinyal değil)' : ''}` : 'baraja çok yakın, belirgin taraf yok'}.`;
+  return { tile, text };
+}
+function card(home, away, when, neutral = 0, M = st.model, league = '', key = '') {
+  const p = B.predict(M, home, away, neutral), ph = p.pHome, pick = ph >= 0.5 ? home : away, conf = Math.max(ph, 1 - ph), tl = totalLine(p, key);
   return `<div class="card">${league ? `<p class="lgtag">${esc(league)}</p>` : ''}<h2>${esc(away)} <span class="muted">@</span> ${esc(home)}</h2>
     ${when ? `<p class="muted" style="margin:-4px 0 8px">${when} (Türkiye saati)${neutral ? ' · tarafsız saha' : ''}</p>` : neutral ? '<p class="muted" style="margin:-4px 0 8px">Tarafsız saha</p>' : ''}
     <div class="tiles"><div class="tile ${conf >= 0.7 ? 'gold' : ''}"><span>Favori</span><b style="font-size:15px">${esc(pick)} ${pct(conf, 0)}</b></div>
-      <div class="tile"><span>Beklenen fark</span><b>${num(Math.abs(p.margin))}</b></div><div class="tile"><span>Beklenen toplam</span><b>${num(p.total)}</b></div></div>
+      <div class="tile"><span>Beklenen fark</span><b>${num(Math.abs(p.margin))}</b></div><div class="tile"><span>Beklenen toplam</span><b>${num(p.total)}</b>${tl.tile}</div></div>
     <div class="bar2"><i style="width:${ph * 100}%"></i></div>
-    <p class="muted" style="margin:6px 0 0">Ev sahibi ${esc(home)} ${pct(ph)} · deplasman ${esc(away)} ${pct(1 - ph)}${neutral ? '' : ` · ev avantajı ${num(M.s.hfa)} sayı`}${p.known ? '' : ' · takımlardan biri için veri yok'}${M === st.model ? '<br>' + confNote(conf) : ''}</p></div>`;
+    <p class="muted" style="margin:6px 0 0">Ev sahibi ${esc(home)} ${pct(ph)} · deplasman ${esc(away)} ${pct(1 - ph)}${neutral ? '' : ` · ev avantajı ${num(M.s.hfa)} sayı`}${p.known ? '' : ' · takımlardan biri için veri yok'}${tl.text}${M === st.model ? '<br>' + confNote(conf) : ''}</p></div>`;
 }
 function chips() {
   const al = st.ev?.atLeast.find((x) => x.t === st.min);
@@ -86,7 +97,7 @@ function tabGames() {
   const now = Date.now(), up = (st.db.upcoming || []).map(([utc, home, away, neutral]) => ({ t: Date.parse(utc), utc, home, away, neutral })).filter((g) => g.t > now - 3 * 3600e3).sort((a, b) => a.t - b.t);
   const horizon = up.length ? Math.max(up[0].t + 36 * 3600e3, now + 48 * 3600e3) : 0, all = up.filter((g) => g.t <= horizon);
   const list = all.filter((g) => { const p = B.predict(st.model, g.home, g.away, g.neutral).pHome; return Math.max(p, 1 - p) >= st.min; });
-  $('#b-body').innerHTML = chips() + (list.length ? `<p class="muted" style="margin:0 4px 10px">Sıradaki ${all.length} maçın ${list.length} tanesi bu eşiğin üstünde.</p>` + list.map((g) => card(g.home, g.away, trTime(g.utc), g.neutral)).join('')
+  $('#b-body').innerHTML = chips() + (list.length ? `<p class="muted" style="margin:0 4px 10px">Sıradaki ${all.length} maçın ${list.length} tanesi bu eşiğin üstünde.</p>` + list.map((g) => card(g.home, g.away, trTime(g.utc), g.neutral, st.model, '', `${st.id}|${g.utc}|${g.home}`)).join('')
     : `<div class="card"><p class="muted">${all.length ? `Sıradaki ${all.length} maçın hiçbiri bu eşiğin üstünde değil. Daha düşük bir eşik seçin.` : 'Önümüzdeki 3 hafta içinde listelenen maç yok (lig arası ya da sezon bitmiş olabilir). “Verileri güncelle”ye dokunun ya da “Analiz” sekmesinden takımları kendiniz seçin.'}</p></div>`);
   bindChips(tabGames);
 }
@@ -173,7 +184,7 @@ function allGames(ls) {
   }
   items.sort((a, b) => a.t - b.t);
   const shown = items.slice(0, 120);
-  $('#b-body').innerHTML = chipsAll() + (shown.length ? `<p class="muted" style="margin:0 4px 10px">Önümüzdeki 3 günde bu seçime uyan ${items.length} maç${items.length > shown.length ? ` (ilk ${shown.length} tanesi gösteriliyor)` : ''}.</p>` + shown.map((g) => card(g.home, g.away, trTime(g.utc), g.neutral, g.M, g.l.name)).join('')
+  $('#b-body').innerHTML = chipsAll() + (shown.length ? `<p class="muted" style="margin:0 4px 10px">Önümüzdeki 3 günde bu seçime uyan ${items.length} maç${items.length > shown.length ? ` (ilk ${shown.length} tanesi gösteriliyor)` : ''}.</p>` + shown.map((g) => card(g.home, g.away, trTime(g.utc), g.neutral, g.M, g.l.name, `${g.l.id}|${g.utc}|${g.home}`)).join('')
     : `<div class="card"><p class="muted">Önümüzdeki 3 günde bu seçime uyan maç yok. Bölgeyi “Hepsi” yapın, eşiği düşürün ya da “Bütün ligleri güncelle”ye dokunun.</p></div>`);
   bindChips(() => allGames(ls));
 }

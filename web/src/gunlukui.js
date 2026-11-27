@@ -89,7 +89,7 @@ function weeklyCard(O, title, lists = []) {
 }
 function basketPart(today, yest) {
   const B = loadDailyB(); if (!B) return '';
-  const T = B.days[today] || {}, Y = B.days[yest] || {}, S = B.sum || {}, out = [`<h3 style="margin:14px 4px 8px">Basketbol kuponları</h3>`];
+  const T = B.days[today] || {}, Y = B.days[yest] || {}, S = B.sum || {}, out = [`<h3 style="margin:4px 4px 8px">Basketbol kuponları · ${dm(today)}</h3>`];
   const TI = [['combo', 'Basketbol banko', 'en az 1,35 · 15 günlük seri', 'bbanko'], ['orta', 'Basketbol orta', 'oran 2,00–3,50', 'bbanko'], ['surpriz', 'Basketbol sürpriz', 'oran 3,50–9,00', 'surpriz']];
   for (const [k, title, rule, cls] of TI) out.push(T[k] ? comboCard(T[k], title, cls) : `<div class="card"><h2>${title} <span class="tag">${rule}</span></h2><p class="muted" style="margin:0">Bugün için kurala uyan kupon yok ya da henüz kurulmadı. Seçimler yalnızca tutma olasılığı yeterince yüksek ve modelin karşı çıkmadığı maçlardan alınır; uygun seçenek yoksa zorla kupon kurulmaz.</p></div>`);
   const yy = TI.filter(([k]) => Y[k]); if (yy.length) { out.push(`<h3 style="margin:14px 4px 8px">Dünün basketbol kuponları</h3>`); for (const [k, title, , cls] of yy) out.push(comboCard(Y[k], 'Dün · ' + title.replace('Basketbol ', ''), cls)); }
@@ -100,37 +100,65 @@ function basketPart(today, yest) {
   out.push(`<details class="card"><summary><b>Basketbol kuponları nasıl kuruluyor?</b></summary><p class="muted" style="margin:8px 0 0">Pazarlar: maç sonucu, handikap, toplam sayı (uzatmalar dahil), ilk yarı toplam ve handikap, çeyrek toplamları. Her seçimin olasılığı iddaa oranından kâr payı temizlenerek bulunur ve güç modelimizle birleştirilir (piyasa esas; model piyasadan en fazla 8 puan ayrılsa bile etkisi 2 puanla sınırlı, piyasanın da en az %55–60 vermesi şart). İlk yarı ve çeyrekler için model, maçın tahmini toplamını ligin ölçülen ilk yarı/çeyrek payıyla böler (NBA, NCAA, G League, NBL, EuroLeague, EuroCup çeyrek skorlarından). Banko: toplam oran 1,35–2,00, en yüksek tutma olasılığı. Orta ve sürpriz: her seçim en az %60 / %57 olasılıklı ve model onaylı; yüksek oran zayıf takımla değil, daha çok sayıda sağlam seçimle kurulur. Aynı maçtan tek seçim alınır, MBS kuralına uyulur.</p></details>`);
   return out.join('');
 }
-export function dailyHtml(busy) {
-  const G = loadDaily();
-  if (!G) return `<div class="card"><h2>Günlük <span class="tag">gerçek oranlar</span></h2><p class="muted">Günlük banko kombine, 6+ gol ve iki yarıda KG listeleri her sabah iddaa oranlarıyla hazırlanır.</p>
+const LISTS = { g6: ['6+ gol listesi', 'gol6', 'Maçta 6 ya da daha fazla gol. İki yol birleştirilir: iddaa\'nın “Toplam Gol 6+” oranı ve alt/üst + 1X2 çizgilerinden hesaplanan gol beklentisi. Sıradan bir maçta %6.'],
+  kk2: ['İki yarıda karşılıklı gol', 'kk2', 'İlk yarıda da ikinci yarıda da iki takım gol atar. İddaa\'nın “1. ve 2. Yarıda KG” oranı ile çizgilerden hesaplanan değer birleştirilir. Sıradan bir maçta %5.'],
+  u35: ['3,5 Üst listesi (4+ gol)', 'u35', 'Daha gerçekçi gol listesi: maçta en az 4 gol. Listedeki maçlarda ihtimal genelde %45–60.'],
+  kgv: ['KG Var listesi', 'kgv', 'Daha gerçekçi gol listesi: iki takım da gol atar. Listedeki maçlarda ihtimal genelde %60–67.'] };
+const RESEARCH = `<details class="card"><summary><b>Neden 7 maçta 1-2 tutuyor?</b> <span class="muted">(araştırma)</span></summary>
+    <p class="muted" style="margin:8px 0 0">22 Avrupa liginin 2021-2026 arasındaki 41.373 maçında (football-data.co.uk, Pinnacle kapanış oranları) test ettim. Oranlardan hesaplanan olasılık gerçekle çok iyi uyuştu: bahisçinin en yüksek gördüğü %1'lik maçlarda bile 6+ gol %28,5, iki yarıda KG %13,5 oranında çıktı. Lig, güç farkı ve gol ortalaması gibi ek bilgiler eklemek tahmini iyileştirmedi; yani bu pazarlarda piyasayı geçmek çok zor. Bu yüzden 7 maçlık listede ortalama 1–2 maç tutması normal; liste “en olası maçlar”dır, kombine değildir. Daha sık tutan seçenek isterseniz 3,5 Üst ve KG Var listelerine bakın.</p>
+    <p class="muted" style="margin:6px 0 0">📉 işareti: 2,5 Üst oranı ilk görüldüğü andan bu yana belirgin düştü, yani piyasaya gol yönünde para geliyor (profesyonellerin takip ettiği “düşen oran” sinyali).</p></details>`;
+const needDaily = (busy) => `<div class="card"><h2>Günlük <span class="tag">gerçek oranlar</span></h2><p class="muted">Günlük banko kombine, basketbol kuponları ve gol listeleri her sabah iddaa oranlarıyla hazırlanır.</p>
     <button id="k-dd" class="primary" style="width:100%">${busy ? 'İndiriliyor…' : 'Günlük verisini indir'}</button></div>`;
-  const today = istDay(Date.now()), yest = istDay(Date.now() - 864e5), T = G.days[today], Y = G.days[yest], S = G.sum || {};
-  const parts = [`<h3 style="margin:4px 4px 8px">Günlük · ${dm(today)}</h3>`];
-  parts.push(T?.combo ? comboCard(T.combo, 'Günlük banko kombinen') : `<div class="card"><h2>Günlük banko kombinen</h2><p class="muted">Bugün için henüz kurulmadı (iddaa bülteni ve maç eşleşmesi bekleniyor). Veri hattı her sabah 07:17'de ve gün içinde birkaç kez çalışır.</p></div>`);
-  parts.push(trial(G, today, '15 günlük deneme · futbol'));
-  const LN = { g6: '6+ gol', kk2: '2 yarı KG', u35: '3,5 Üst', kgv: 'KG Var' };
+const days = () => ({ today: istDay(Date.now()), yest: istDay(Date.now() - 864e5) });
+/** Bolum dugmelerindeki kisa durum yazisi. */
+export function dailyBadges() {
+  const G = loadDaily(), Bk = loadDailyB(), { today, yest } = days(), out = {};
+  const T = G?.days[today], Y = G?.days[yest];
+  if (G) {
+    out.banko = T?.combo ? `bugün oran ${o2(T.combo.odds)}${T.combo.res === 'W' ? ' ✓' : T.combo.res === 'L' ? ' ✗' : ''}` : 'bugün hazırlanıyor';
+    for (const k of Object.keys(LISTS)) out[k] = Y?.[k] ? `dün ${Y[k].hits ?? 0}/7 tuttu` : T?.[k] ? 'bugün hazır' : 'hazırlanıyor';
+    out.karne = G.sum?.combo?.days ? `kombine ${G.sum.combo.won}/${G.sum.combo.days}` : 'sonuçlar birikiyor';
+  }
+  if (Bk) { const t = Bk.days[today] || {}, n = ['combo', 'orta', 'surpriz'].filter((k) => t[k]).length; out.basket = n ? `bugün ${n} kupon` : 'bugün kupon yok'; }
+  return out;
+}
+function listPart(G, k, today, yest) {
+  const [title, cls, info] = LISTS[k], T = G.days[today], Y = G.days[yest], S = G.sum?.[k];
+  const parts = [`<h3 style="margin:4px 4px 8px">${title} · ${dm(today)}</h3>`];
+  parts.push(T?.[k] ? listCard(T[k], title, info, cls, false) : `<div class="card"><h2>${title}</h2><p class="muted" style="margin:0">Bugün için henüz hazır değil (iddaa bülteni bekleniyor; veri hattı sabah 07:17'den itibaren çalışır).</p></div>`);
+  if (Y?.[k]) parts.push(listCard(Y[k], `Dün · ${title}`, '', cls, true));
+  const ds = Object.keys(G.days).sort().filter((d) => d < today && G.days[d][k]).slice(-10).reverse();
+  if (ds.length) parts.push(`<div class="card"><h2>Son günler <span class="tag">${S ? `${S.hits ?? 0} maç tuttu · beklenen ${num(S.exp ?? 0, 1)}` : ''}</span></h2><table class="ktab"><tr><th>Gün</th><th>Tutan</th><th>Beklenen</th></tr>
+    ${ds.map((d) => { const L = G.days[d][k], e = L.legs.slice(0, 7).reduce((a, l) => a + l.p, 0); return `<tr><td>${d.slice(8)}.${d.slice(5, 7)}</td><td><b>${L.hits ?? 0}</b>/7</td><td class="muted">${num(e, 1)}</td></tr>`; }).join('')}</table></div>`);
+  if (k === 'g6' || k === 'kk2') parts.push(RESEARCH);
+  return parts.join('');
+}
+function bankoPart(G, today, yest) {
+  const T = G.days[today], Y = G.days[yest];
+  return [`<h3 style="margin:4px 4px 8px">Günlük · ${dm(today)}</h3>`,
+    T?.combo ? comboCard(T.combo, 'Günlük banko kombinen') : `<div class="card"><h2>Günlük banko kombinen</h2><p class="muted">Bugün için henüz kurulmadı (iddaa bülteni ve maç eşleşmesi bekleniyor). Veri hattı her sabah 07:17'de ve gün içinde birkaç kez çalışır.</p></div>`,
+    trial(G, today, '15 günlük deneme · futbol'),
+    Y?.combo ? comboCard(Y.combo, `Dünün kombinesi · ${dm(yest)}`) : '',
+    `<details class="card"><summary><b>Kombine nasıl kuruluyor?</b></summary><p class="muted" style="margin:8px 0 0">Kombine iddaa'nın gerçek oranlarıyla kurulur: her seçimin olasılığı oranlardan kâr payı temizlenerek bulunur, istatistik modeli açıkça karşı çıkıyorsa seçim alınmaz; toplam oranı 1,35–1,45 olan, MBS kuralına uyan ve tutma olasılığı en yüksek 2–3'lü seçilir. Sonuçlar biriktikçe oran olasılıkları gerçekleşen oranlara göre kendiliğinden düzeltilir. Son güncelleme ${hm(G.updated)}.</p></details>`].join('');
+}
+function karnePart(G, today) {
+  const S = G.sum || {}, LN = { g6: '6+ gol', kk2: '2 yarı KG', u35: '3,5 Üst', kgv: 'KG Var' }, parts = [`<h3 style="margin:4px 4px 8px">Karne ve sanal kasa · futbol</h3>`];
   parts.push(kasaCard(G.ozet, 'Sanal kasa · futbol', LN)); parts.push(clvCard(G.ozet, 'Kapanış oranı (CLV) · futbol'));
   parts.push(weeklyCard(G.ozet, 'Haftalık rapor · futbol', Object.entries(LN)));
-  parts.push(basketPart(today, yest));
-  const LISTS = [['g6', '6+ gol listesi', 'gol6', 'Maçta 6 ya da daha fazla gol. İki yol birleştirilir: iddaa\'nın “Toplam Gol 6+” oranı ve alt/üst + 1X2 çizgilerinden hesaplanan gol beklentisi. Sıradan bir maçta %6.'],
-    ['kk2', 'İki yarıda karşılıklı gol', 'kk2', 'İlk yarıda da ikinci yarıda da iki takım gol atar. İddaa\'nın “1. ve 2. Yarıda KG” oranı ile çizgilerden hesaplanan değer birleştirilir. Sıradan bir maçta %5.'],
-    ['u35', '3,5 Üst listesi (4+ gol)', 'u35', 'Daha gerçekçi gol listesi: maçta en az 4 gol. Listedeki maçlarda ihtimal genelde %45–60.'],
-    ['kgv', 'KG Var listesi', 'kgv', 'Daha gerçekçi gol listesi: iki takım da gol atar. Listedeki maçlarda ihtimal genelde %60–67.']];
-  if (Y && (Y.combo || Y.g6 || Y.kk2)) {
-    parts.push(`<h3 style="margin:14px 4px 8px">Dünün sonuçları · ${dm(yest)}</h3>`);
-    if (Y.combo) parts.push(comboCard(Y.combo, 'Dünün kombinesi'));
-    for (const [k, t, c] of LISTS) if (Y[k]) parts.push(listCard(Y[k], t, '', c, true));
-  }
-  parts.push(`<h3 style="margin:14px 4px 8px">Bugünün gol listeleri</h3>`);
-  for (const [k, t, c, info] of LISTS) parts.push(T?.[k] ? listCard(T[k], t, info, c, false) : `<div class="card muted">${t} bugün için henüz hazır değil.</div>`);
-  parts.push(`<details class="card"><summary><b>Neden 7 maçta 1-2 tutuyor?</b> <span class="muted">(araştırma)</span></summary>
-    <p class="muted" style="margin:8px 0 0">22 Avrupa liginin 2021-2026 arasındaki 41.373 maçında (football-data.co.uk, Pinnacle kapanış oranları) test ettim. Oranlardan hesaplanan olasılık gerçekle çok iyi uyuştu: bahisçinin en yüksek gördüğü %1'lik maçlarda bile 6+ gol %28,5, iki yarıda KG %13,5 oranında çıktı. Lig, güç farkı ve gol ortalaması gibi ek bilgiler eklemek tahmini iyileştirmedi; yani bu pazarlarda piyasayı geçmek çok zor. Bu yüzden 7 maçlık listede ortalama 1–2 maç tutması normal; liste “en olası maçlar”dır, kombine değildir. Daha sık tutan seçenek isterseniz 3,5 Üst ve KG Var listelerine bakın.</p>
-    <p class="muted" style="margin:6px 0 0">📉 işareti: 2,5 Üst oranı ilk görüldüğü andan bu yana belirgin düştü, yani piyasaya gol yönünde para geliyor (profesyonellerin takip ettiği “düşen oran” sinyali).</p></details>`);
-  // gecmis tablo
   const ds = Object.keys(G.days).sort(), pastDays = ds.filter((d) => d < today).slice(-14).reverse();
   if (pastDays.length) parts.push(`<div class="card"><h2>Son günler</h2><table class="ktab"><tr><th>Gün</th><th>Kombine</th><th>6+</th><th>2 yarı KG</th><th>3,5Ü</th><th>KG</th></tr>
     ${pastDays.map((d) => { const x = G.days[d]; return `<tr><td>${d.slice(8)}.${d.slice(5, 7)}</td><td>${x.combo ? (x.combo.res === 'W' ? '✓ ' : x.combo.res === 'L' ? '✗ ' : '… ') + o2(x.combo.odds) : '–'}</td><td>${x.g6 ? `${x.g6.hits ?? 0}/7` : '–'}</td><td>${x.kk2 ? `${x.kk2.hits ?? 0}/7` : '–'}</td><td>${x.u35 ? `${x.u35.hits ?? 0}/7` : '–'}</td><td>${x.kgv ? `${x.kgv.hits ?? 0}/7` : '–'}</td></tr>`; }).join('')}</table>
     <p class="muted" style="margin:8px 0 0">Toplam: kombine ${S.combo?.won ?? 0}/${S.combo?.days ?? 0} (beklenen ${num(S.combo?.exp ?? 0, 1)}) · 6+ gol ${S.g6?.hits ?? 0} maç (beklenen ${num(S.g6?.exp ?? 0, 1)}) · iki yarı KG ${S.kk2?.hits ?? 0} maç (beklenen ${num(S.kk2?.exp ?? 0, 1)})</p></div>`);
-  parts.push(`<p class="muted" style="margin:0 4px 14px">Son güncelleme ${hm(G.updated)}. Kombine iddaa'nın gerçek oranlarıyla kurulur: her seçimin olasılığı oranlardan kâr payı temizlenerek bulunur, istatistik modeli açıkça karşı çıkıyorsa seçim alınmaz; toplam oranı 1,35–1,45 olan, MBS kuralına uyan ve tutma olasılığı en yüksek 2–3'lü seçilir. Sonuçlar biriktikçe oran olasılıkları gerçekleşen oranlara göre kendiliğinden düzeltilir.</p>`);
+  if (parts.length === 1) parts.push('<div class="card muted">Sonuçlar birikiyor; ilk günler bitince burada görünecek.</div>');
   return parts.join('');
+}
+/** Kombine sekmesinin gunluk bolumleri: banko, basket, g6, kk2, u35, kgv, karne. */
+export function dailySection(key, busy) {
+  const { today, yest } = days();
+  if (key === 'basket') return basketPart(today, yest) || needDaily(busy);
+  const G = loadDaily(); if (!G) return needDaily(busy);
+  if (key === 'banko') return bankoPart(G, today, yest);
+  if (key === 'karne') return karnePart(G, today);
+  if (LISTS[key]) return listPart(G, key, today, yest);
+  return '';
 }

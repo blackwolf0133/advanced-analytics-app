@@ -43,9 +43,10 @@ export function ukToUtc(date, time) {
 }
 export const loadLeague = (div) => read('fb_' + div, { seasons: {}, fetched: 0 });
 export const loadFixtures = () => read('fb_fix', { list: [], fetched: 0 });
+export async function downloadFixtures(get) { write('fb_fix', { list: parseFixtures(await get(BASE + 'fixtures.csv')), fetched: Date.now() }); }
 // mac: [tarih, ev, dep, evGol, depGol, o1, oX, o2, sezon, tarafsiz(0/1), agirlik]
 export const matches = (db) => Object.keys(db.seasons).map(Number).sort((a, b) => a - b).flatMap((y) => db.seasons[y].map((m) => [...m.slice(0, 8), y, m[8] || 0, m[9] ?? 1]));
-export async function download(get, div, seasons = 4, now = new Date()) {
+export async function download(get, div, seasons = 4, now = new Date(), fix = true) {
   const db = loadLeague(div), cur = currentSeason(now), report = [];
   for (let y = cur - seasons + 1; y <= cur; y++) {
     if (y < cur && (db.seasons[y] || []).length >= 100) { report.push({ season: y, ok: true, n: db.seasons[y].length, cached: true }); continue; }
@@ -54,7 +55,7 @@ export async function download(get, div, seasons = 4, now = new Date()) {
   }
   if (!report.some((r) => r.ok && !r.cached)) throw new Error(report[report.length - 1].error || 'veri alınamadı');
   db.fetched = Date.now(); write('fb_' + div, db);
-  try { write('fb_fix', { list: parseFixtures(await get(BASE + 'fixtures.csv')), fetched: Date.now() }); report.fixtures = true; } catch (e) { report.fixtures = false; report.fixError = e.message; }
+  if (fix) { try { await downloadFixtures(get); report.fixtures = true; } catch (e) { report.fixtures = false; report.fixError = e.message; } }
   return report;
 }
 

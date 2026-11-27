@@ -5,10 +5,10 @@ import * as B from './basket.js';
 import { read, write } from './store.js';
 import { $, esc, pct, num } from './ui.js';
 import { httpGet } from './net.js';
-import { dailyHtml, downloadDaily, loadDaily } from './gunlukui.js';
+import { dailySection, dailyBadges, downloadDaily, loadDaily } from './gunlukui.js';
 import { viewPara } from './paraui.js';
 
-const st = { gn: read('kb_gn', 7), sport: read('kb_sport', 'f'), when: read('kb_when', 'today'), n: read('kb_n', 3), mine: read('kb_mine', false), busy: false, cache: {} };
+const st = { sport: read('kb_sport', 'f'), when: read('kb_when', 'today'), n: read('kb_n', 3), mine: read('kb_mine', false), busy: false, cache: {} };
 const trTime = (t) => new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(t));
 const odds = (q) => num(1 / q, 2);
 
@@ -65,21 +65,54 @@ function couponCard(c, mode, ctx) {
     ${ctx.lines.map(([bt, label]) => btLine(bt, mode, st.n, label)).join('')}
     <button class="ksave" data-mode="${mode}" style="width:100%;margin-top:8px">Kuponu kaydet ve takip et</button></div>`;
 }
-const topSeg = (k) => `<div class="row seg" id="k-top">${[['daily', 'Günlük ve kuponlar'], ['para', '💰 Para akışı']].map(([v, l]) => `<button data-top="${v}" class="grow ${k === v ? 'primary' : ''}">${l}</button>`).join('')}</div>`;
+const SECS = [['banko', '⭐', 'Günlük banko', 'futbol kombine'], ['basket', '🏀', 'Basketbol kuponları', 'banko · orta · sürpriz'],
+  ['g6', '⚽', '6+ gol', '7 maçlık liste'], ['kk2', '🔁', 'İki yarıda KG', '1. ve 2. yarı KG var'], ['u35', '📈', '3,5 Üst', '4+ gol listesi'], ['kgv', '🤝', 'KG Var', 'karşılıklı gol'],
+  ['model', '🧮', 'Model kuponları', 'banko · MS · sürpriz'], ['mine', '📌', 'Kuponlarım', 'kaydettiklerin'], ['karne', '📊', 'Karne ve kasa', 'sanal kasa · CLV'], ['para', '💰', 'Para akışı', 'büyük bahisler']];
+const DAILY = new Set(['banko', 'basket', 'g6', 'kk2', 'u35', 'kgv', 'karne']);
+function secGrid(cur) {
+  const b = dailyBadges(), list = saved(), wait = list.filter((c) => c.legs.some((l) => l.hit == null)).length;
+  b.mine = list.length ? `${list.length} kupon${wait ? ` · ${wait} sürüyor` : ''}` : 'henüz yok';
+  return `<div id="ksec" class="ksec">${SECS.map(([k, ic, name, sub]) => `<button data-sec="${k}" class="${cur === k ? 'primary' : ''}"><b>${ic} ${name}</b><small>${esc(b[k] || sub)}</small></button>`).join('')}</div>`;
+}
 export function viewKombine(toast) {
-  const top = read('kb_top', 'daily');
-  const bindTop = () => { $('#k-top').onclick = (e) => { const b = e.target.closest('[data-top]'); if (b) { write('kb_top', b.dataset.top); viewKombine(toast); } }; };
-  if (top === 'para') { $('#main').innerHTML = topSeg('para') + '<div id="k-para"></div>'; bindTop(); viewPara(toast, $('#k-para')); return; }
+  let sec = read('kb_sec', 'banko'); if (!SECS.some((x) => x[0] === sec)) sec = 'banko';
+  const re = () => viewKombine(toast);
+  const bindSec = () => { $('#ksec').onclick = (e) => { const b = e.target.closest('[data-sec]'); if (b) { write('kb_sec', b.dataset.sec); re(); window.scrollTo(0, 0); } }; };
+  if (sec === 'para') { $('#main').innerHTML = secGrid('para') + '<div id="k-para"></div>'; bindSec(); viewPara(toast, $('#k-para')); return; }
+  const update = async (dailyOnly) => {
+    st.busy = true; re();
+    const errs = [];
+    try { await downloadDaily(httpGet); } catch (e) { errs.push('günlük'); }
+    if (!dailyOnly) {
+      if (st.sport !== 'b' || savedNeeds('f')) { try { await T.download(httpGet); } catch (e) { errs.push('futbol'); } }
+      if (st.sport !== 'f' || savedNeeds('b')) { try { await B.downloadAll(httpGet); st.cache = {}; } catch (e) { errs.push('basketbol'); } }
+    }
+    st.busy = false; resolveSaved(); toast(errs.length ? `${errs.join(', ')} verisi alınamadı.` : 'Veriler güncellendi.'); re();
+  };
+  let body = '';
+  if (DAILY.has(sec)) body = dailySection(sec, st.busy) + `<button id="k-up" style="width:100%;margin-bottom:12px" ${st.busy ? 'disabled' : ''}>${st.busy ? 'Güncelleniyor…' : 'Yenile'}</button>`;
+  else if (sec === 'mine') { resolveSaved(); body = (savedCard() || '<div class="card"><h2>Kuponlarım</h2><p class="muted" style="margin:0">Henüz kayıtlı kupon yok. “Model kuponları” bölümünde bir kuponu “Kaydet ve takip et” ile ekleyin; maçlar bittikçe ✓ / ✗ işaretlenir.</p></div>') + `<button id="k-up" style="width:100%;margin-bottom:12px" ${st.busy ? 'disabled' : ''}>${st.busy ? 'Güncelleniyor…' : 'Sonuçları güncelle'}</button>`; }
+  else body = modelHtml();
+  $('#main').innerHTML = secGrid(sec) + body + `<div class="warn" style="margin-top:4px">Olasılıklar oranlardan ve istatistik modelinden hesaplanır; sakatlık, kadro ve motivasyon bilgisi yoktur. Kazanç garantisi yoktur; eğlence içindir. Küçük tutarlarla ve kendine bir sınır koyarak oyna.</div>`;
+  bindSec();
+  if ($('#k-dd')) $('#k-dd').onclick = () => update(true);
+  if ($('#k-up')) $('#k-up').onclick = () => update(DAILY.has(sec));
+  if (sec === 'model') bindModel(re, update, toast);
+  document.querySelectorAll('.kdel').forEach((x) => { x.onclick = () => { write('kb_saved', saved().filter((c) => c.id !== x.dataset.id)); re(); }; });
+  // gunluk veri: ilk acilista ya da 30 dakikadan eskiyse kendiliginden iner
+  if (!loadDaily() && !st.autoDaily) { st.autoDaily = true; downloadDaily(httpGet).then(re, () => {}); }
+  else if (loadDaily() && Date.now() - (loadDaily().fetched || 0) > 30 * 6e4 && !st.busy && !st.autoDaily) { st.autoDaily = true; downloadDaily(httpGet).then(() => { st.autoDaily = false; if ($('#ksec')) re(); }, () => { st.autoDaily = false; }); }
+}
+function modelHtml() {
   const f = st.sport !== 'b' ? footLegs() : { legs: [], ok: true }, b = st.sport !== 'f' ? basketLegs() : { legs: [], ok: true };
   const legs = [...f.legs, ...b.legs], need = (st.sport !== 'b' && !f.ok) || (st.sport !== 'f' && !b.ok);
   const lines = []; if (st.sport === 'f') lines.push([f.bt, 'futbol, son 26 hafta']); if (st.sport === 'b') lines.push([b.bt, 'basketbol']);
   const modes = st.sport === 'b' ? ['banko', 'surpriz'] : ['banko', 'ms', 'surpriz'];
   const coupons = Object.fromEntries(modes.map((m) => [m, K.coupon(legs, m, st.n)]));
-  const goalModes = [];   // gol listeleri artik gercek oranlarla Gunluk bolumunde
   st.coupons = coupons;
   const chip = (k, v, cur, attr) => `<button data-${attr}="${k}" class="grow ${cur === k ? 'primary' : ''}" style="min-height:38px;padding:4px 6px">${v}</button>`;
-  $('#main').innerHTML = `${topSeg('daily')}${dailyHtml(st.busy)}
-  <h3 style="margin:18px 4px 8px">Model kuponları</h3>
+  return `<h3 style="margin:4px 4px 8px">Model kuponları</h3>
+  <p class="muted" style="margin:0 4px 10px">Bizim istatistik modelimizin kurduğu kuponlar (oran sitesinden bağımsız). Günlük iddaa oranlı kuponlar için üstteki “Günlük banko” ve “Basketbol kuponları”na bakın.</p>
   <div class="row seg" id="k-sport">${[['f', '⚽ Futbol'], ['b', '◍ Basketbol'], ['fb', 'Karışık']].map(([k, v]) => chip(k, v, st.sport, 'sp')).join('')}</div>
   <div class="row seg" id="k-when">${[['today', 'Bugün'], ['tomorrow', 'Yarın'], ['72', '3 gün']].map(([k, v]) => chip(k, v, st.when, 'w')).join('')}</div>
   <div class="row seg" id="k-n"><span class="muted" style="align-self:center;margin-right:4px">Maç sayısı</span>${[2, 3, 4].map((k) => chip(k, k, st.n, 'n')).join('')}</div>
@@ -87,54 +120,16 @@ export function viewKombine(toast) {
   ${need ? `<div class="card"><p class="muted">${st.sport === 'f' ? 'Futbol' : 'Basketbol'} verisi yok.</p><button id="k-dl" class="primary" style="width:100%">${st.busy ? 'İndiriliyor…' : 'Verileri indir'}</button></div>` : ''}
   <p class="muted" style="margin:0 4px 10px">${legs.length ? `${(f.n || 0) + (b.n || 0)} maç tarandı (başlamamış, iki takımın da yeterli maçı olan).` : 'Bu aralıkta uygun maç bulunamadı.'}${(st.sport !== 'b' && f.ok && !f.cal) || (st.sport !== 'f' && b.ok && !b.cal) ? ' Kalibrasyon verisi henüz inmedi; “Verileri güncelle”ye dokunun.' : ''}</p>
   ${modes.map((m) => couponCard(coupons[m], m, { lines })).join('')}
-  ${goalModes.length ? `<h3 style="margin:18px 4px 8px">Gol avı kombineleri</h3>
-  <div class="row seg" id="k-gn"><span class="muted" style="align-self:center;margin-right:4px">Maç sayısı</span>${[7, 8, 10].map((k) => chip(k, k, st.gn, 'gn')).join('')}</div>
-  ${goalModes.map((m) => listCard(coupons[m], m, f.bt)).join('')}` : ''}
-  ${savedCard()}
   <button id="k-up" style="width:100%;margin-bottom:12px" ${st.busy ? 'disabled' : ''}>${st.busy ? 'Güncelleniyor…' : 'Verileri ve sonuçları güncelle'}</button>
-  <div class="warn">Nasıl kurulur: Olasılıklar istatistik modelinden gelir ve geçmiş testte gerçekte ne sıklıkla tuttuğuna göre düzeltilir (kalibrasyon). Kupon olasılığı seçimlerin çarpımıdır; maçların birbirinden bağımsız olduğu varsayılır. “Adil oran” = 1 ÷ olasılık; bahis sitelerinin oranları kâr payı yüzünden genelde bundan düşüktür. Sakatlık, kadro ve motivasyon bilgisi yoktur. Kazanç garantisi yoktur; eğlence içindir.</div>`;
-  const re = () => viewKombine(toast); bindTop();
+  <details class="card"><summary><b>Nasıl kurulur?</b></summary><p class="muted" style="margin:8px 0 0">Olasılıklar istatistik modelinden gelir ve geçmiş testte gerçekte ne sıklıkla tuttuğuna göre düzeltilir (kalibrasyon). Kupon olasılığı seçimlerin çarpımıdır; maçların birbirinden bağımsız olduğu varsayılır. “Adil oran” = 1 ÷ olasılık; bahis sitelerinin oranları kâr payı yüzünden genelde bundan düşüktür.</p></details>`;
+}
+function bindModel(re, update, toast) {
   $('#k-sport').onclick = (e) => { const x = e.target.closest('[data-sp]'); if (x) { st.sport = x.dataset.sp; write('kb_sport', st.sport); re(); } };
   $('#k-when').onclick = (e) => { const x = e.target.closest('[data-w]'); if (x) { st.when = x.dataset.w; write('kb_when', st.when); re(); } };
-  if ($('#k-gn')) $('#k-gn').onclick = (e) => { const x = e.target.closest('[data-gn]'); if (x) { st.gn = Number(x.dataset.gn); write('kb_gn', st.gn); re(); } };
   $('#k-n').onclick = (e) => { const x = e.target.closest('[data-n]'); if (x) { st.n = Number(x.dataset.n); write('kb_n', st.n); re(); } };
   if ($('#k-mine')) $('#k-mine').onchange = (e) => { st.mine = e.target.checked; write('kb_mine', st.mine); re(); };
-  const update = async () => {
-    st.busy = true; re();
-    const errs = [];
-    try { await downloadDaily(httpGet); } catch (e) { errs.push('günlük'); }
-    if (st.sport !== 'b' || savedNeeds('f')) { try { await T.download(httpGet); } catch (e) { errs.push('futbol'); } }
-    if (st.sport !== 'f' || savedNeeds('b')) { try { await B.downloadAll(httpGet); st.cache = {}; } catch (e) { errs.push('basketbol'); } }
-    st.busy = false; resolveSaved(); toast(errs.length ? `${errs.join(', ')} verisi alınamadı.` : 'Veriler güncellendi.'); re();
-  };
-  if ($('#k-dl')) $('#k-dl').onclick = update;
-  if ($('#k-dd')) $('#k-dd').onclick = update;
-  if (!loadDaily() && !st.autoDaily) { st.autoDaily = true; downloadDaily(httpGet).then(re, () => {}); }   // ilk acilista gunluk veri kendiliginden iner
-  else if (loadDaily() && Date.now() - (loadDaily().fetched || 0) > 30 * 6e4 && !st.busy && !st.autoDaily) { st.autoDaily = true; downloadDaily(httpGet).then(() => { st.autoDaily = false; re(); }, () => { st.autoDaily = false; }); }
-  $('#k-up').onclick = update;
-  document.querySelectorAll('.ksave').forEach((x) => { x.onclick = () => { const c = st.coupons[x.dataset.mode]; if (!c) return; saveCoupon(c); toast('Kupon kaydedildi; sonuçlar geldikçe işaretlenir.'); re(); }; });
-  document.querySelectorAll('.kdel').forEach((x) => { x.onclick = () => { write('kb_saved', saved().filter((c) => c.id !== x.dataset.id)); re(); }; });
-  resolveSaved();
-}
-
-const LIST_INFO = {
-  gol6: 'Maçta toplam 6 ya da daha fazla gol. Sıradan bir maçta ihtimali yaklaşık %6; burada modelin en yüksek ihtimal verdiği maçlar sıralanır.',
-  kk2: 'İlk yarıda da ikinci yarıda da iki takım gol atar. Sıradan bir maçta ihtimali yaklaşık %5; modelin en yüksek ihtimal verdiği maçlar.',
-};
-const oneIn = (q) => { const x = 1 / q; return x >= 1e6 ? `${num(x / 1e6, x >= 1e7 ? 0 : 1)} milyonda 1` : x >= 1e3 ? `${Math.round(x / 1e3).toLocaleString('tr-TR')} binde 1` : `${Math.round(x)}'de 1`; };
-function listCard(c, mode, bt) {
-  const name = K.MODES[mode].name;
-  if (!c) return `<div class="card"><h2>${name} <span class="tag">en az 7 maç</span></h2><p class="muted">Bu aralıkta ${st.gn} uygun maç yok (iki yarı skoru bilinen ligler gerekir). Zamanı “3 gün” yapın.</p></div>`;
-  const expHits = c.legs.reduce((s2, l) => s2 + l.q, 0), o = bt?.[mode]?.[st.gn] || bt?.[mode]?.[7];
-  const legs = c.legs.map((l) => `<div class="kleg"><div><b>${esc(l.h)} – ${esc(l.a)}</b><div class="muted">${trTime(l.t)} · ${esc(l.lgName || l.lg)}</div></div>
-    <div class="kpick"><b>%${num(l.q * 100, 0)}</b><div class="muted">adil ${odds(l.q)}</div></div></div>`).join('');
-  const best = o ? o.dist.reduce((b, v, i) => (v ? i : b), 0) : 0;
-  return `<div class="card kcard ${mode}"><h2>${name} <span class="tag">${c.legs.length} maç</span></h2>
-    <p class="muted" style="margin:0 0 6px">${LIST_INFO[mode]}</p>${legs}
-    <div class="ktot"><span>Beklenen tutan maç <b>${num(expHits, 1)} / ${c.legs.length}</b></span><span>Adil oran <b>${c.odds >= 1e6 ? '1 milyon+' : Math.round(c.odds).toLocaleString('tr-TR')}</b></span></div>
-    <p class="muted" style="margin:8px 0 0">Hepsinin birden tutma olasılığı: <b>${oneIn(c.q)}</b>. Kombine olarak neredeyse imkânsızdır; bu liste “bugün gol yağmuruna en yakın maçlar” olarak okunmalı.</p>
-    ${o && o.k >= 15 ? `<p class="muted" style="margin:6px 0 0">Geçmiş test (son 26 hafta, ${o.k} gün): her gün kurulan ${o.dist.length - 1}'li listede ortalama <b>${num(o.leg * (o.dist.length - 1), 1)}</b> maç tuttu (model beklentisi ${num(o.legExp * (o.dist.length - 1), 1)}); en iyi gün ${best}/${o.dist.length - 1}; hepsinin tuttuğu gün: ${o.hit}.</p>` : ''}
-    <button class="ksave" data-mode="${mode}" style="width:100%;margin-top:8px">Listeyi kaydet ve takip et</button></div>`;
+  if ($('#k-dl')) $('#k-dl').onclick = () => update(false);
+  document.querySelectorAll('.ksave').forEach((x) => { x.onclick = () => { const c = st.coupons[x.dataset.mode]; if (!c) return; saveCoupon(c); resolveSaved(); toast('Kupon kaydedildi; “Kuponlarım” bölümünde sonuçlar geldikçe işaretlenir.'); re(); }; });
 }
 
 /* ---------------- kaydedilen kuponlar ---------------- */

@@ -9,7 +9,9 @@ EL["updated"] = now.isoformat()
 BCL = json.loads((HERE / "fixtures/veri_bcl.json").read_text()); BCL["updated"] = now.isoformat()
 BCL["upcoming"] = [[(now + dt.timedelta(hours=8 + 2 * i)).strftime("%Y-%m-%dT%H:%M:00.000Z"), u[1], u[2], u[3]] for i, u in enumerate(BCL["upcoming"][:5])]
 ix = json.loads(IDX); ix["basket"] += [{"id": "bcl", "name": "FIBA Şampiyonlar Ligi (BCL)", "country": "Avrupa"}, {"id": "fec", "name": "FIBA Europe Cup", "country": "Avrupa"}]; IDX = json.dumps(ix)
-DATA = {"index.json": IDX, "b/euroleague.json": json.dumps(EL), "b/bcl.json": json.dumps(BCL)}
+u0, u1 = EL["upcoming"][0], EL["upcoming"][1]
+ORAN = {"v": 2, "updated": now.isoformat(), "ts": {"euroleague": 15.5}, "g": {f"euroleague|{u0[0]}|{u0[1]}": {"tot": [140.5, 1.85, 1.85], "pu": 0.5}, f"euroleague|{u1[0]}|{u1[1]}": {"tot": [190.5, 1.8, 1.9], "pu": 0.49}}}
+DATA = {"index.json": IDX, "b/euroleague.json": json.dumps(EL), "b/bcl.json": json.dumps(BCL), "b/oran.json": json.dumps(ORAN)}
 MOCK = "window.__d = %s; window.Native = { httpGet: (id, url, h) => setTimeout(() => { const k = Object.keys(window.__d).find((k) => url.endsWith('/veri/' + k) || url.endsWith('@veri/' + k)); k ? AAD.onHttp(id, 200, window.__d[k]) : AAD.onHttp(id, 404, 'Not Found'); }, 50) };" % json.dumps(DATA)
 srv = subprocess.Popen([sys.executable, "-m", "http.server", "8812", "--bind", "127.0.0.1"], cwd=WWW, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); time.sleep(1); errs = []
 try:
@@ -23,6 +25,8 @@ try:
         print("bildirim:", pg.inner_text("#toast")[:120]); assert "2 lig indirildi" in pg.inner_text("#toast")
         opts = pg.eval_on_selector_all("#b-lg option", "o => o.map(x => x.textContent)"); print("ligler:", len(opts), opts[:4]); assert len(opts) == 15 and pg.eval_on_selector_all("#b-lg optgroup", "g => g.map(x => x.label)")[:2] == ["Türkiye", "Avrupa"]
         tags = pg.eval_on_selector_all("#b-body .lgtag", "t => t.map(x => x.textContent)"); print("yaklasan (butun ligler):", len(tags), sorted(set(tags))); assert len(tags) == 11 and set(tags) == {"EuroLeague", "FIBA Şampiyonlar Ligi (BCL)"}
+        body = pg.inner_text("#b-body"); assert "baraj 140,5" in body and "ÜST +" in body and "baraj 190,5" in body and "ALT −" in body and "iddaa barajı" in body, body[:900]
+        pg.locator("#b-body .card", has_text="baraj 140,5").first.screenshot(path="/tmp/bb_line.png")
         pg.screenshot(path="/tmp/phone_bb_all.png")
         pg.click('[data-r="ABD"]'); assert "uyan maç yok" in pg.inner_text("#b-body"); pg.click('[data-r="Avrupa"]'); pg.click('[data-m="0.7"]'); n70 = pg.locator("#b-body .lgtag").count(); assert n70 < 11
         pg.click('[data-t="results"]'); rows = pg.locator("#b-body .res").count(); print("sonuclar (butun ligler):", rows, pg.inner_text("#b-body .card >> nth=1")[:80].replace("\n", " ")); assert rows > 3

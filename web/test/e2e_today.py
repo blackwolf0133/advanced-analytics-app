@@ -25,6 +25,7 @@ try:
         pg.click("#fg-lgh"); n_lg = pg.locator("#fg-ch input").count(); pg.click('#fg-ch [data-a="none"]'); assert pg.locator("#fg-list .fm").count() == 0
         pg.check('#fg-ch input[data-l="%s"]' % live["lg"]); cards = pg.locator("#fg-list .fm").count(); print("lig sayisi:", n_lg, "| yalniz Uluslar Ligi:", cards, "mac"); assert cards >= 1
         pg.click('#fg-ch [data-a="all"]'); total = pg.locator("#fg-list .fm").count(); print("hepsi:", total); assert total > cards
+        assert "tahmin yok" not in pg.inner_text("#fg-list") and pg.locator("#fg-list .fm .tiles").count() == total and "gizlendi" in pg.inner_text("#fg-body")
         pg.click("#fg-lgh"); pg.click('[data-s="conf"]'); confs = pg.eval_on_selector_all("#fg-list .fm .tile.gold b", "b => b.map(x => parseInt(x.textContent.replace(/[^0-9]/g, '')))"); assert confs == sorted(confs, reverse=True) and len(confs) > 5
         pg.click('[data-s="time"]'); c = pg.locator('#fg-list .fm[data-id="%s"]' % live["id"]); t = c.inner_text(); print("kart:", t.replace("\n", " | ")[:260])
         assert "İY skor tahmini" in t and "Maç sonucu skor tahmini" in t and "İkinci yarı sonucu" in t and "YZ ortak analiz" in t

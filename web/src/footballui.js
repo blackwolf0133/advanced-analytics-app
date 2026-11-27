@@ -7,11 +7,15 @@ import { httpGet } from './net.js';
 import { viewToday, stop as stopToday } from './todayui.js';
 import { viewOdds } from './oranui.js';
 
-const st = { div: S.byKey(read('fb_sel', 'T1')).key, tab: 'week', db: null, ms: [], M: null, ev: null, evFor: null, busy: false, report: null, home: null, away: null, toast: null };
+const sel0 = read('fb_sel', 'T1');
+const st = { div: sel0 === 'ALL' ? 'ALL' : S.byKey(sel0).key, mc: {}, all: { w: 'today', prog: null, calc: null }, tab: 'week', db: null, ms: [], M: null, ev: null, evFor: null, busy: false, report: null, home: null, away: null, toast: null };
 const trTime = (ms) => new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(ms));
 const NAMES = ['Ev sahibi', 'Beraberlik', 'Deplasman'];
 
 const cat = () => S.byKey(st.div);
+const allOpt = () => `<option value="ALL" ${st.div === 'ALL' ? 'selected' : ''}>★ Hepsi (bütün ligler, ${S.CATALOG.length})</option>`;
+const divSelect = () => `<select id="f-div" style="width:100%;margin-bottom:10px">${allOpt()}${S.groups().map(([g, cs]) => `<optgroup label="${esc(g)}">${cs.map((c) => `<option value="${c.key}" ${c.key === st.div ? 'selected' : ''}>${esc(c.name)}${F.loadLeague(c.key).fetched ? ' ✓' : ''}</option>`).join('')}</optgroup>`).join('')}</select>`;
+function bindDiv() { $('#f-div').onchange = (e) => { st.div = e.target.value === 'ALL' ? 'ALL' : S.byKey(e.target.value).key; write('fb_sel', st.div); st.report = null; st.home = st.away = null; viewFootball(); }; }
 const MIN = 60;
 const yl = (y) => (cat().src === 'milli' || st.db?.calendar ? String(y) : F.seasonLabel(y));   // takvim yili ligleri: 2026                                      // modelin kurulmasi icin en az mac
 function reload() {
@@ -25,11 +29,11 @@ export function viewFootball(toast) {
   st.toast = toast || st.toast;
   if (read('fb_mode', 'today') === 'today') { $('#main').innerHTML = seg('today') + '<div id="f-today"></div>'; bindMode(); viewToday(st.toast, $('#f-today')); return; }
   if (read('fb_mode', 'today') === 'odds') { stopToday(); $('#main').innerHTML = seg('odds') + '<div id="f-odds"></div>'; bindMode(); viewOdds(st.toast, $('#f-odds')); return; }
-  stopToday(); reload();
+  stopToday(); if (st.div === 'ALL') { viewAll(); return; } reload();
   const n = st.ms.length, ys = Object.keys(st.db.seasons).map(Number).sort();
   $('#main').innerHTML = seg('league') + `
   <div class="card"><h2>Lig <span class="tag">${n ? `${n} maç · ${cat().src === 'milli' ? ys[0] + '–' + ys[ys.length - 1] : ys.length + ' sezon'}` : 'veri yok'}</span></h2>
-    <select id="f-div" style="width:100%;margin-bottom:10px">${S.groups().map(([g, cs]) => `<optgroup label="${esc(g)}">${cs.map((c) => `<option value="${c.key}" ${c.key === st.div ? 'selected' : ''}>${esc(c.name)}${F.loadLeague(c.key).fetched ? ' ✓' : ''}</option>`).join('')}</optgroup>`).join('')}</select>
+    ${divSelect()}
     <button id="f-dl" class="primary" style="width:100%" ${st.busy ? 'disabled' : ''}>${st.busy ? 'İndiriliyor…' : n ? 'Verileri güncelle' : 'Verileri indir'}</button>
     <p class="muted" style="margin:10px 0 0">${st.db.fetched ? 'Son güncelleme: ' + trTime(st.db.fetched) + '. ' : ''}${{ fd: 'Maç sonuçları ve oranlar football-data.co.uk adresinden (son 4 sezon)', fdn: 'Maç sonuçları ve oranlar football-data.co.uk adresinden (son 4 sezon)', om: 'Bu sezonun sonuçları ve fikstürü open-matchday’den (her gün güncellenen açık veri; oran yok)', milli: 'Son 8 yılın bütün milli maçları (açık veri seti) ve yaklaşan maçlar' }[cat().src]} ücretsiz indirilir; hesaplar telefonda yapılır.</p>
     ${st.report ? `<p class="muted" style="margin:8px 0 0">${st.report.length > 5 ? `${st.report.length} yıl, ${st.report.reduce((a, r) => a + (r.n || 0), 0)} maç indirildi.` : st.report.map((r) => `${yl(r.season)}: ${r.ok ? r.n + ' maç' + (r.cached ? ' (kayıtlı)' : '') : 'alınamadı (' + esc(r.error) + ')'}`).join('<br>')}${st.report.fixtures === false || st.report.fixError ? '<br>Fikstür alınamadı (' + esc(st.report.fixError) + ')' : ''}</p>` : ''}
@@ -40,7 +44,7 @@ export function viewFootball(toast) {
     : n ? '' : `<div class="card"><h2>Nasıl çalışır</h2><ol class="steps"><li>Ligi seçip “Verileri indir”e dokunun: son 4 sezonun sonuçları ve haftanın fikstürü iner.</li><li>İki model çalışır: gol modeli (Poisson / Dixon-Coles) ve Elo. Olasılık ikisinin ortalamasıdır.</li><li>“Karne” modelin geçmişte ne kadar tuttuğunu ve bahis oranlarına karşı ne yaptığını gösterir.</li></ol></div>`}
   <div class="warn">Olasılıklar geçmiş maç sonuçlarından hesaplanır. Sakatlık, ceza, kadro ve motivasyon bilgisi yoktur. Bahis oranları bu bilgileri de içerdiği için genellikle modelden daha isabetlidir. Kazanç garantisi yoktur.</div>`;
   bindMode();
-  $('#f-div').onchange = (e) => { st.div = S.byKey(e.target.value).key; write('fb_sel', st.div); st.report = null; st.home = st.away = null; viewFootball(); };
+  bindDiv();
   $('#f-dl').onclick = async () => {
     st.busy = true; viewFootball(); const div = st.div;
     try { const c = S.byKey(div), r = c.src === 'fd' ? await F.download(httpGet, div) : await S.downloadExtra(httpGet, c); if (div === st.div) st.report = r; st.toast(r.some((x) => !x.ok) ? 'İndirildi; bazı sezonlar alınamadı.' : 'Veriler güncellendi.'); }
@@ -108,4 +112,67 @@ function tabTable() {
   const rows = F.table(st.db);
   $('#f-body').innerHTML = `<div class="card"><h2>Puan durumu <span class="tag">${yl(Math.max(...Object.keys(st.db.seasons).map(Number)))}</span></h2><table class="t"><thead><tr><th>#</th><th>Takım</th><th>O</th><th>G-B-M</th><th>Av</th><th>P</th></tr></thead><tbody>
     ${rows.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.team)}</td><td>${r.p}</td><td>${r.w}-${r.d}-${r.l}</td><td>${r.gf - r.ga > 0 ? '+' : ''}${r.gf - r.ga}</td><td><b>${r.pts}</b></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+/* ---------------- Hepsi: butun ligler ---------------- */
+const fixturesOf = (c, db) => (c.src === 'fd' ? F.loadFixtures().list.filter((f) => f.div === c.key).map((f) => ({ ...f, t: F.ukToUtc(f.date, f.time) })) : (db.upcoming || []));
+function modelFor(c) {
+  const db = F.loadLeague(c.key); if (!db.fetched) return null;
+  const k = db.fetched, m = st.mc[c.key]; if (m && m.k === k) return m;
+  const ms = F.matches(db), M = ms.length >= MIN ? F.model(ms) : null;
+  return (st.mc[c.key] = { k, M, db });
+}
+async function downloadAll() {
+  const list = S.CATALOG, P = (st.all.prog = { i: 0, n: list.length, ok: 0, fail: [] }); let next = 0;
+  const one = async (c) => {
+    try { if (c.src === 'fd') await F.download(httpGet, c.key, 4, new Date(), false); else await S.downloadExtra(httpGet, c); P.ok++; }
+    catch (e) { P.fail.push(c.name); }
+    P.i++; P.cur = c.name; if ($('#fa-prog')) $('#fa-prog').innerHTML = progTxt();
+  };
+  const worker = async () => { while (next < list.length) await one(list[next++]); };
+  try { await F.downloadFixtures(httpGet); } catch (e) { P.fixErr = true; }
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  write('fb_all_at', Date.now()); st.mc = {};
+  return P;
+}
+const progTxt = () => { const P = st.all.prog; if (!P) return ''; return `<div class="pbar" style="height:10px;margin:10px 0 6px"><i class="pm" style="width:${Math.round((P.i / P.n) * 100)}%;top:0;bottom:0"></i></div>${P.i < P.n ? `İndiriliyor ${P.i} / ${P.n}${P.cur ? ` · ${esc(P.cur)}` : ''}` : `${P.ok} / ${P.n} lig indirildi${P.fail.length ? ` · alınamayan: ${P.fail.slice(0, 6).map(esc).join(', ')}${P.fail.length > 6 ? '…' : ''}` : ''}`}`; };
+function viewAll() {
+  const have = S.CATALOG.filter((c) => F.loadLeague(c.key).fetched), at = read('fb_all_at', 0), A = st.all;
+  $('#main').innerHTML = seg('league') + `
+  <div class="card"><h2>Lig <span class="tag">${have.length} / ${S.CATALOG.length} lig indirili</span></h2>${divSelect()}
+    <button id="fa-dl" class="primary" style="width:100%" ${st.busy ? 'disabled' : ''}>${st.busy ? 'İndiriliyor…' : have.length ? 'Hepsini güncelle' : 'Hepsini indir'}</button>
+    <div class="muted" id="fa-prog">${progTxt()}</div>
+    <p class="muted" style="margin:10px 0 0">${at ? 'Son toplu güncelleme: ' + trTime(at) + '. ' : ''}Bütün liglerin sonuçları ve fikstürleri tek dokunuşla iner (birkaç dakika sürebilir, Wi-Fi önerilir). Aşağıda bütün liglerin yaklaşan maçları tek listede gösterilir; tek bir lige girmek için listeden seçin.</p></div>
+  ${have.length ? `<div class="row seg" id="fa-w">${[['today', 'Bugün'], ['tomorrow', 'Yarın'], ['3', '3 gün']].map(([k, v]) => `<button data-w="${k}" class="grow ${A.w === k ? 'primary' : ''}" style="min-height:38px">${v}</button>`).join('')}</div><div id="fa-list"><div class="card muted">Modeller hesaplanıyor…</div></div>` : ''}
+  <div class="warn">Olasılıklar geçmiş maç sonuçlarından hesaplanır. Sakatlık, ceza, kadro ve motivasyon bilgisi yoktur. Kazanç garantisi yoktur.</div>`;
+  bindMode(); bindDiv();
+  $('#fa-dl').onclick = async () => {
+    st.busy = true; viewAll();
+    try { const P = await downloadAll(); st.toast(P.fail.length ? `${P.ok} lig indirildi, ${P.fail.length} lig alınamadı.` : 'Bütün ligler indirildi.'); } catch (e) { st.toast('İndirilemedi: ' + e.message, 7000); }
+    st.busy = false; if (st.div === 'ALL' && $('#fa-dl')) viewAll();
+  };
+  if (!have.length) return;
+  $('#fa-w').onclick = (e) => { const b = e.target.closest('[data-w]'); if (b) { A.w = b.dataset.w; viewAll(); } };
+  fillAll(have);
+}
+async function fillAll(have) {
+  const now = Date.now(), dayOf = (t) => new Date(t + 3 * 36e5).toISOString().slice(0, 10), today = dayOf(now), tom = dayOf(now + 864e5);
+  const inW = (t) => t > now - 2 * 36e5 && (st.all.w === 'today' ? dayOf(t) === today : st.all.w === 'tomorrow' ? dayOf(t) === tom : t < now + 3 * 864e5);
+  const rows = [], token = (st.all.calc = {});
+  for (let i = 0; i < have.length; i++) {
+    const c = have[i], db = F.loadLeague(c.key), fx = fixturesOf(c, db).filter((f) => inW(f.t)); if (!fx.length) continue;
+    const m = modelFor(c); if (!m?.M) continue;
+    for (const f of fx) rows.push({ c, f, p: F.forecast(m.M, f.home, f.away, f.neutral || 0) });
+    if (i % 4 === 3) { await new Promise((r) => setTimeout(r, 0)); if (st.all.calc !== token || !$('#fa-list')) return; }
+  }
+  rows.sort((a, b) => a.f.t - b.f.t);
+  const el = $('#fa-list'); if (!el || st.all.calc !== token) return;
+  el.innerHTML = rows.length ? `<p class="muted" style="margin:0 4px 8px">${rows.length} maç · ${new Set(rows.map((r) => r.c.key)).size} lig</p>` + rows.map(({ c, f, p }) => {
+    const top = p.p.indexOf(Math.max(...p.p)), im = F.implied(f.odds);
+    return `<div class="card fm"><p class="lgtag" data-lg="${c.key}" style="cursor:pointer">${esc(S.label(c))} ›</p>
+      <div class="fmrow"><div class="grow fmt"><b>${esc(f.home)}</b><b>${esc(f.away)}</b></div><div class="lb"><b>${new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' }).format(new Date(f.t))}</b>${st.all.w === '3' ? `<span class="lmin">${new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', weekday: 'short', day: 'numeric' }).format(new Date(f.t))}</span>` : ''}</div></div>
+      <div class="tiles" style="margin-top:8px">${p.p.map((x, j) => `<div class="tile ${j === top ? 'gold' : ''}"><span>${['1 (ev)', 'X (berabere)', '2 (deplasman)'][j]}</span><b>${pct(x, 0)}</b></div>`).join('')}</div>
+      <p class="fpred muted">2,5 üst ${pct(p.over25, 0)} · karşılıklı gol ${pct(p.btts, 0)} · beklenen gol ${num(p.lambda)}–${num(p.mu)}${im ? `<br>Bahis oranlarına göre: ${im.map((x) => pct(x, 0)).join(' / ')}` : ''}${p.known ? '' : '<br>Takımlardan biri için geçmiş veri az; lig ortalaması kullanıldı.'}</p></div>`;
+  }).join('') : '<div class="card"><p class="muted">Bu aralıkta indirilen liglerde maç yok. “3 gün”ü deneyin ya da “Hepsini güncelle”ye dokunun (fikstürler haftada birkaç kez yenilenir).</p></div>';
+  el.onclick = (e) => { const b = e.target.closest('[data-lg]'); if (b) { st.div = b.dataset.lg; write('fb_sel', st.div); st.report = null; st.tab = 'week'; viewFootball(); } };
 }

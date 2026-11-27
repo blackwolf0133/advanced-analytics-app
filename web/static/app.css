@@ -82,8 +82,20 @@ b.hit{color:#58e08f}
 .om{cursor:pointer}.omrow{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;font-size:13.5px;line-height:1.4}
 .omdet{margin-top:10px;border-top:1px solid rgba(255,255,255,.08);padding-top:8px}.oan{margin:4px 0 0;padding-left:18px;line-height:1.5}.oan li{margin-bottom:6px}
 .kasa svg{width:100%;height:auto}
-.pmk{margin-top:8px}.prow{display:grid;grid-template-columns:1fr 90px 74px;gap:6px;align-items:center;font-size:13.5px;padding:2px 0}
-.prow.big .pname{color:#ffd35a;font-weight:600}.pname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pbar{position:relative;height:12px;background:rgba(255,255,255,.07);border-radius:6px;overflow:hidden}
 .pbar i{position:absolute;left:0;top:0;bottom:0;border-radius:6px}.pbar .pt{background:rgba(122,162,255,.45)}.pbar .pm{background:#7aa2ff;top:4px;bottom:4px}
 .pnum{text-align:right;font-size:12.5px}
+.tline{display:block;font-size:12px;color:var(--muted);margin-top:3px;font-family:inherit}.tile .tline b{font-size:12px;font-weight:600;font-family:inherit}
+
+.pa-t{font-size:15px;margin-bottom:2px}
+.pa-sig{margin:10px 0 2px;padding:8px 10px;border-radius:10px;background:#3a2f0e;border:1px solid #6b5418;color:#ffe08a;font-size:14px}.pa-sig span{color:#d8c07a;font-size:12.5px}.pa-sig small{color:#e9d49a;font-size:12.5px}
+.pa-crowd{margin:10px 0 2px;font-size:13px;color:var(--muted)}
+.pa-mk{margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.07)}.pa-h{font-size:12.5px;color:var(--muted);margin-bottom:4px}
+.pa-leg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;margin-bottom:5px}.pa-leg span{display:inline-flex;align-items:center;gap:5px;min-width:0}.pa-leg i{width:9px;height:9px;border-radius:3px;flex:none}.pa-leg em{font-style:normal;color:var(--muted);font-size:12px}.pa-leg .on{color:#ffd35a;font-weight:600}
+.pa-row{display:grid;grid-template-columns:40px 1fr;gap:6px;align-items:center;margin:3px 0}.pa-row em{font-style:normal;font-size:11.5px;color:var(--muted)}
+.sbar{display:flex;height:16px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.06)}.sbar i{display:block;height:100%;font:600 10.5px/16px var(--mono);color:#0e1319;text-align:center;overflow:hidden;white-space:nowrap}
+.pa-k{display:flex;justify-content:space-between;gap:8px;padding:3px 0}
+.ksec{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.ksec button{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;text-align:left;min-height:58px;padding:8px 10px;border-radius:12px}
+.ksec button b{font-size:14px;font-weight:600}.ksec button small{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.ksec button.primary small{color:#0e1319;opacity:.75}

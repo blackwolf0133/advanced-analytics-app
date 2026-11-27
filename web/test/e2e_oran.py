@@ -29,7 +29,7 @@ try:
         pg.click('#om-when [data-w="all"]'); pg.wait_for_timeout(200); pg.click('.om[data-id="2"]'); a2 = pg.inner_text('.om[data-id="2"]'); print("BITEN:", a2[-300:]); assert "Sonuç 0-1" in a2 and "tuttu ✓" in a2
         pg.click("#om-up"); pg.wait_for_function("!document.querySelector('#om-up').disabled", timeout=15000); pg.click('#om-when [data-w="today"]'); pg.wait_for_timeout(200)
         t2 = pg.inner_text(".om >> nth=0"); print("CANLI:", t2[:200]); assert "1,80 → 1,55" in t2 and "telefon" in pg.inner_text("#f-odds")
-        pg.click('#nav [data-v="kombine"]'); pg.wait_for_selector(".kasa", timeout=15000); k = pg.inner_text("#main")
+        pg.click('#nav [data-v="kombine"]'); pg.click('#ksec [data-sec="karne"]'); pg.wait_for_selector(".kasa", timeout=15000); k = pg.inner_text("#main")
         assert "Sanal kasa · futbol" in k and "Kapanış oranı (CLV)" in k and "+%2,1" in k and "Haftalık rapor" in k, k[:1500]
         pg.click('#nav [data-v="settings"]'); pg.check("#ntf"); assert json.loads(pg.evaluate("localStorage.getItem('aad.notify_daily')")) is True
         with pg.expect_download() as d: pg.click("#bk-save")
