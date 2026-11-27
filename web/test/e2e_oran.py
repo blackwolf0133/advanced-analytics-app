@@ -14,7 +14,10 @@ LIVE = {"data": {"events": [{"i": 11, "d": int((now + dt.timedelta(hours=4)).tim
 G = json.loads((HERE / "fixtures/veri_gunluk.json").read_text()); ks = sorted(G["days"]); G["days"] = {ist(-(len(ks) - 1 - i)): G["days"][k] for i, k in enumerate(ks)}
 G["ozet"] = {"kasa": {"combo": [[ist(-1), 35.6], [ist(0), -64.4]], "lists": {"g6": [[ist(-1), -43.6]]}, "stake": {"combo": 100, "list": 10}}, "clv": {"combo": {"n": 4, "avg": 0.021, "pos": 0.75}, "lists": {}},
   "weeks": [{"w": ist(-1), "combo": {"n": 2, "won": 1, "exp": 1.24, "pl": -64.4}, "lists": {"g6": {"days": 1, "hits": 1, "exp": 1.6, "pl": -43.6}}, "clv": 0.021, "clvN": 4}]}
-DATA = {"/veri/f/hareket.json": json.dumps(H), "sportsbookv2.iddaa.com/sportsbook/events": json.dumps(LIVE), "/veri/f/gunluk.json": json.dumps(G)}
+BZ = {"v": 2, "updated": "2026-11-20T00:00:00Z", "n": 68829, "step": 0.025, "ostep": 0.025,
+      "ms": {f"{h}|{a}": {"n": 120, "r": [60, 35, 25], "s": {"1-0": 14, "1-1": 13, "2-1": 11}} for h in range(41) for a in range(41)},
+      "ou": {str(k): {"n": 400, "o25": 210, "o35": 110, "u15": 90, "kg": 205, "s": {"1-1": 40}} for k in range(41)}}
+DATA = {"/veri/f/benzer.json": json.dumps(BZ), "/veri/f/hareket.json": json.dumps(H), "sportsbookv2.iddaa.com/sportsbook/events": json.dumps(LIVE), "/veri/f/gunluk.json": json.dumps(G)}
 MOCK = "window.__d = %s; window.Native = { httpGet: (id, url, h) => setTimeout(() => { const k = Object.keys(window.__d).find((k) => url.includes(k)); k ? AAD.onHttp(id, 200, window.__d[k]) : AAD.onHttp(id, 404, ''); }, 15) };" % json.dumps(DATA)
 srv = subprocess.Popen([sys.executable, "-m", "http.server", "8822", "--bind", "127.0.0.1"], cwd=WWW, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); time.sleep(1); errs = []
 try:
@@ -24,7 +27,10 @@ try:
         pg.click('#nav [data-v="football"]'); pg.click('#f-mode [data-mode="odds"]'); pg.wait_for_selector(".om", timeout=15000)
         t = pg.inner_text("#f-odds"); print(t[:500]); assert "Arsenal – Chelsea" in t and "1,80 → 1,60" in t and "▼ %11" in t and "değerli oran" in t
         assert pg.locator(".om .odrop").count() >= 1 and pg.locator(".om .orise").count() >= 1
-        pg.click(".om >> nth=0"); pg.wait_for_selector(".omdet"); a = pg.inner_text(".omdet"); print("ANALIZ:", a[:900])
+        pg.wait_for_function("localStorage.getItem('aad.fg_benzer') !== null", timeout=10000); pg.click('#f-mode [data-mode="today"]'); pg.click('#f-mode [data-mode="odds"]'); pg.wait_for_selector(".om")
+        assert "oranlar hakkında 6 gerçek" in pg.inner_text("#f-odds") and "487.363" in pg.inner_html("#f-odds")
+        pg.click(".om >> nth=0"); pg.wait_for_selector(".omdet"); a = pg.inner_text(".omdet"); print("ANALIZ:", a[:1400])
+        assert "Benzer oranlı geçmiş maçlar" in a and "benzer maçta: 1 %50 · X %29 · 2 %21" in a and "2,5 Üst %53" in a, a
         assert "2,5 Üst oranı 1,80 → 1,60 düştü" in a and "piyasa modelimizin yönüne geliyor" in a and "Değerli oran" in a
         pg.click('#om-when [data-w="all"]'); pg.wait_for_timeout(200); pg.click('.om[data-id="2"]'); a2 = pg.inner_text('.om[data-id="2"]'); print("BITEN:", a2[-300:]); assert "Sonuç 0-1" in a2 and "tuttu ✓" in a2
         pg.click("#om-up"); pg.wait_for_function("!document.querySelector('#om-up').disabled", timeout=15000); pg.click('#om-when [data-w="today"]'); pg.wait_for_timeout(200)

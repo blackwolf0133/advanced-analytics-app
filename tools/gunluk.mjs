@@ -98,7 +98,11 @@ export async function gunluk({ get, pool, readJson, writeJson, NOW, matches, cal
   // 4) bugunun kombinesi ve listeleri (bir kez kurulur, sonra degismez)
   const htLeague = new Map(); { const c = {}; for (const r of Object.values(ev)) { const o = (c[r[1]] ||= [0, 0]); o[0]++; if (r[7] != null) o[1]++; } for (const [k, [n, h]] of Object.entries(c)) htLeague.set(k, n >= 10 && h / n >= 0.8); }
   const day = (store.days[today] ||= { d: today }), early = new Date(now + 3 * 36e5).getUTCHours() < 7;   // 07:00'den once kurulmaz (oranlar gun icinde oturur)
-  const upcoming = matches.filter((m) => m.od && m.st === 'pre' && istDay(m.t) === today && Date.parse(m.t) > now + 20 * 6e4 && !leagues[m.lg]?.nat);
+  // Olagandisi oran hareketi: mac sonucu oranlarindan biri ilk gorulduğunden bu yana %20+ degistiyse mac kupona/listeye alinmaz.
+  // Arastirma: dusen oranin bilgisi kapanisa kadar fiyata zaten yansiyor (34.000+ secimde dususten sonra oynamak %10-13 kaybettirdi);
+  // cok sert hareketler ayrica sike / sakatlik gibi bilinmeyen risk tasir. Telefon bu maclari "⚠️ olagandisi hareket" diye isaretler.
+  const wild = (m) => { const a = hist.ev[m.id]?.od0?.ms, b = m.od?.ms; return !!(a && b && a.some((x, i) => x > 1 && b[i] > 1 && Math.abs(b[i] / x - 1) >= 0.2)); };
+  const upcoming = matches.filter((m) => m.od && m.st === 'pre' && istDay(m.t) === today && Date.parse(m.t) > now + 20 * 6e4 && !leagues[m.lg]?.nat && !wild(m));
   // listeler kurulacaksa: aday maclarin butun pazarlari (iki yarida KG ve 2. yari KG yalnizca mac detayinda var)
   if ((!day.g6 || !day.kk2 || !day.iykg) && upcoming.length && pool && !early) {
     const score = (m) => { const P0 = marketProbs(m.od, leagues[m.lg]?.f); return Math.max(P0.G6 || 0, (P0.KK2 || 0) * 1.5, (P0['U2.5'] || 0) * 0.2, (P0.IYKGd || 0) * 0.6); };

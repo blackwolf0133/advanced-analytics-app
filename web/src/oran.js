@@ -156,3 +156,26 @@ export function matchEvents(espn, iddaa) {
   for (const [, id, e] of cands) { if (out.has(id) || used.has(e.io)) continue; out.set(id, e); used.add(e.io); }
   return out;
 }
+
+/**
+ * "Benzer oranli gecmis maclar" (veri hattinin f/benzer.json tablosu): oranlar olasiliga cevrilir, ayni olasilik dilimindeki
+ * gecmis maclarin sonuclari toplanir. Az mac varsa komsu dilimler eklenir (en az `min` mac).
+ */
+export function benzerOf(B, od, min = 200) {
+  if (!B) return null; const out = {};
+  const grow = (T, keys) => { let n = 0; const acc = []; for (const ks of keys) { for (const k of ks) { const c = T[k]; if (c) { acc.push(c); n += c.n; } } if (n >= min) break; } return n ? acc : null; };
+  if (od.ms?.every((x) => x > 1)) {
+    const p = fair(od.ms), h = Math.round(p[0] / B.step), a = Math.round(p[2] / B.step), rings = [];
+    for (let r = 0; r <= 3; r++) { const ks = []; for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) if (Math.max(Math.abs(i), Math.abs(j)) === r) ks.push(`${h + i}|${a + j}`); rings.push(ks); }
+    const acc = grow(B.ms, rings);
+    if (acc) { const n = acc.reduce((s, c) => s + c.n, 0), r = [0, 1, 2].map((i) => acc.reduce((s, c) => s + c.r[i], 0) / n), sc = {}; for (const c of acc) for (const [k, v] of Object.entries(c.s)) sc[k] = (sc[k] || 0) + v;
+      out.ms = { n, r, p, top: Object.entries(sc).sort((x, y) => y[1] - x[1]).slice(0, 3).map(([k, v]) => [k, v / n]) }; }
+  }
+  const o = od.ou?.['2.5'];
+  if (o?.every((x) => x > 1)) {
+    const pu = fair([o[1], o[0]])[0], k = Math.round(pu / B.ostep), rings = [[String(k)]]; for (let r = 1; r <= 3; r++) rings.push([String(k - r), String(k + r)]);
+    const acc = grow(B.ou, rings);
+    if (acc) { const n = acc.reduce((s, c) => s + c.n, 0), f = (x) => acc.reduce((s, c) => s + c[x], 0) / n; out.ou = { n, pu, o25: f('o25'), o35: f('o35'), u15: f('u15'), kg: f('kg') }; }
+  }
+  return out.ms || out.ou ? out : null;
+}

@@ -27,6 +27,7 @@ function comboCard(c, title, cls = 'banko') {
     ${c.legs.map((l) => `<div class="kleg"><div>${mark(l.res)} <b>${esc(l.h)} – ${esc(l.a)}</b>${scs(l)}<div class="muted">${hm(l.t)} · ${esc(l.ln || l.lg)} · MBS ${l.mbs}${l.res ? '' : mvTag(l.mv)}</div></div>
       <div class="kpick"><b>${esc(l.label)}</b><div class="muted">oran ${o2(l.odd)} · %${Math.round(l.p * 100)}</div>${closeTag(l)}</div></div>`).join('')}
     <div class="ktot"><span>Tutma olasılığı (tahmin) <b>${pct(c.p)}</b></span><span>${st || `Oran ${o2(c.odds)}`}</span></div>
+    ${c.p && c.odds ? `<p class="muted" style="margin:6px 0 0">Uzun vadede 100 TL'nin beklenen dönüşü ≈ <b>${Math.round(c.p * c.odds * 100)} TL</b> (iddaa'nın kâr payı yüzünden 100'ün altında; maç sayısı arttıkça düşer).</p>` : ''}
     <p class="muted" style="margin:6px 0 0">Oranlar ${hm(c.built)} itibarıyla iddaa bülteninden; maç saatine kadar değişebilir, oynarken sitedeki güncel orana bakın.</p></div>`;
 }
 const mvTag = (mv) => (mv != null && mv <= -0.06 ? ` · <span class="hit">📉 oran %${Math.round(-mv * 100)} düştü</span>` : mv != null && mv >= 0.08 ? ` · 📈 oran %${Math.round(mv * 100)} yükseldi` : '');

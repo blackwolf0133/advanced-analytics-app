@@ -8,7 +8,7 @@ import { viewKombine } from './kombineui.js';
 import * as AI from './aiui.js';
 import { onHttp } from './net.js';
 
-const VERSION = '0.16.0';
+const VERSION = '0.17.0';
 const st = { view: 'roulette', db: null, lastPred: undefined, armed: null, cap: 'off' };
 const TITLES = { roulette: 'Rulet', football: 'Futbol', basket: 'Basketbol', kombine: 'Kombine', settings: 'Ayarlar' };
 
@@ -148,7 +148,7 @@ function viewSettings() {
   $('#ntf').onchange = (e) => { write('notify_daily', e.target.checked); if (window.Native?.setDailyNotify) Native.setDailyNotify(e.target.checked); toast(e.target.checked ? 'Sabah bildirimi açıldı (07:30).' : 'Sabah bildirimi kapatıldı.'); };
   $('#bk-save').onclick = () => {
     const keys = window.Native?.dbKeys ? JSON.parse(Native.dbKeys()) : Object.keys(localStorage).filter((k) => k.startsWith('aad.')).map((k) => k.slice(4));
-    const SKIP = /^(fg_gun|fg_daily|fg_move|fg_move_live|bb_daily|bb_index|fd_|fdn_|om_|ai_\d)/, data = {};
+    const SKIP = /^(fg_gun|fg_daily|fg_move|fg_benzer|fg_move_live|bb_daily|bb_index|fd_|fdn_|om_|ai_\d)/, data = {};
     for (const k of keys) { if (SKIP.test(k) || (/^bb_/.test(k) && !/^bb_(sel|region|ncaa)$/.test(k))) continue; const v = read(k, undefined); if (v !== undefined && JSON.stringify(v).length < 3e6) data[k] = v; }
     const text = JSON.stringify({ app: 'advanced-analytics', v: 1, made: new Date().toISOString(), data }), name = `aad-yedek-${new Date().toISOString().slice(0, 10)}.json`;
     if (window.Native?.saveBackup) { const r = Native.saveBackup(name, text); toast(r ? `Yedek kaydedildi: ${r} (${Object.keys(data).length} kayıt)` : 'Yedek yazılamadı.', 6000); }
