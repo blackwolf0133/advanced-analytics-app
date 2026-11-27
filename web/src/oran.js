@@ -107,6 +107,12 @@ export function marketProbs(od, f = 0.443) {
   }
   const mix = (a, b) => (a != null && b != null ? expit((logit(a) + logit(b)) / 2) : a ?? b ?? null);
   P.G6 = mix(P.G6m, P.G6d); P.KK2 = mix(P.KK2m, P.KK2d);
+  // ilk yari: KG var, 0,5 ust, 1,5 ust (dogrudan pazar + gol beklentisinin ilk yari payindan)
+  if (od.iykg) P.IYKGm = fair(od.iykg)[0];
+  if (od.iou?.['0.5']) P.IU05m = fair(od.iou['0.5'])[1];
+  if (od.iou?.['1.5']) P.IU15m = fair(od.iou['1.5'])[1];
+  if (P.xg) { const [lh, la] = P.xg, l1 = (lh + la) * f; P.IYKGd = sc(lh * f) * sc(la * f); P.IU05d = 1 - Math.exp(-l1); P.IU15d = 1 - Math.exp(-l1) * (1 + l1); }
+  P.IYKG = mix(P.IYKGm, P.IYKGd); P.IU05 = mix(P.IU05m, P.IU05d); P.IU15 = mix(P.IU15m, P.IU15d);
   if (P['U3.5'] == null && P.U35d != null) P['U3.5'] = P.U35d;
   if (P.KGV == null && P.KGVd != null) P.KGV = P.KGVd;
   return P;

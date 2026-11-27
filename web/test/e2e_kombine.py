@@ -21,13 +21,15 @@ try:
         pg = ctx.new_page(); pg.on("pageerror", lambda e: errs.append(str(e))); pg.add_init_script(MOCK); pg.goto("http://127.0.0.1:8820/index.html")
         sec = lambda k: (pg.click(f'#ksec [data-sec="{k}"]'), pg.wait_for_timeout(150))
         pg.click('#nav [data-v="kombine"]'); pg.wait_for_selector("#ksec", timeout=15000)
-        assert pg.locator("#ksec button").count() == 10
+        assert pg.locator("#ksec button").count() == 12
         pg.wait_for_function("document.querySelector('#main').innerText.includes('Günlük banko kombinen')", timeout=15000)
         txt = pg.inner_text("#main"); print(txt[:900])
         assert "15 günlük deneme" in txt and "Dünün kombinesi" in txt and "TUTTU" in txt and "6+ gol listesi" not in txt
         pg.screenshot(path="/tmp/kombine_banko.png", full_page=True)
         sec("g6"); txt = pg.inner_text("#main"); assert pg.locator(".kcard.gol6").count() == 2 and "2 / 7 tuttu" in txt and "Günlük banko kombinen" not in txt and "Neden 7 maçta" in txt
         sec("kk2"); assert pg.locator(".kcard.kk2").count() == 2
+        sec("iykg"); assert "İlk yarı KG Var" in pg.inner_text("#main")
+        sec("iyu"); assert "İlk yarı 0,5 Üst" in pg.inner_text("#main"); pg.click('#k-iyu [data-iyu="iu15"]'); pg.wait_for_timeout(150); assert "İlk yarı 1,5 Üst ·" in pg.inner_text("#main")
         sec("u35"); sec("kgv"); sec("karne"); txt = pg.inner_text("#main"); assert "Son günler" in txt or "Sanal kasa" in txt, txt
         sec("basket"); txt = pg.inner_text("#main")
         assert "Basketbol banko" in txt and "Basketbol orta" in txt and "Basketbol sürpriz" in txt and "İY 112,5 Üst" in txt, txt

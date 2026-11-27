@@ -79,20 +79,43 @@ export function bestTier(legs, T) {
   return best && { odds: best.odds, p: best.p, legs: best.legs };
 }
 
-/** Yaklasan maclarin iddaa barajlari (toplam sayi, handikap, mac sonucu) ve lig toplam sapmasi: telefon kartlarinda "ust mu alt mi" icin. */
-export function barajlar({ iddaa, dbs, now, writeJson, NOW }) {
+/**
+ * Yaklasan maclarin iddaa barajlari (toplam sayi, handikap, mac sonucu) ve lig toplam sapmasi: telefon kartlarinda "ust mu alt mi".
+ * Ayrica baraj farki karnesi: modelin barajdan en az %58 / %42 ayrildigi maclar ilk goruldukleri baraj ve oranla kaydedilir,
+ * sonuc gelince islenir (b/baraj.json). Boylece "model barajdan ayrildiginda ne kadar tutuyor" gercek veriyle olculur.
+ */
+export function barajlar({ iddaa, dbs, now, writeJson, readJson = () => null, NOW }) {
   const games = []; for (const [id, db] of dbs) for (const [utc, h, a, neu] of db.upcoming || []) { const t = Date.parse(utc); if (t > now - 3 * 36e5 && t < now + 3 * 864e5) games.push({ id: `${id}|${utc}|${h}`, lg: id, t: utc, h, a, neu }); }
-  const pairs = matchEvents(games, iddaa), g = {}, ts = {};
+  const pairs = matchEvents(games, iddaa), g = {}, ts = {}, models = new Map();
+  const B0 = readJson('b/baraj.json', null), log = B0 && B0.v === 2 ? B0.log : {};
   const main = (o) => { let best = null; for (const [line, v] of Object.entries(o || {})) { const d = Math.abs(Math.log(v[0] / v[1])); if (!best || d < best[0]) best = [d, Number(line), v]; } return best && [best[1], ...best[2]]; };
+  const modelOf = (lg) => { if (!models.has(lg)) models.set(lg, model(dbs.get(lg))); return models.get(lg); };
   for (const x of games) {
     const e = pairs.get(x.id); if (!e) continue;
     const tot = main(e.od.tot), hcp = main(e.od.hcp), r = {};
     if (tot) { r.tot = tot; r.pu = r3(fair([tot[1], tot[2]])[1]); }
     if (hcp) r.hcp = hcp; if (e.od.ms) r.ms = e.od.ms;
-    if (Object.keys(r).length) { g[x.id] = r; if (!(x.lg in ts)) { const M = model(dbs.get(x.lg)); ts[x.lg] = M ? r3(M.tsig) : null; } }
+    if (!Object.keys(r).length) continue;
+    g[x.id] = r; const M = modelOf(x.lg); if (!(x.lg in ts)) ts[x.lg] = M ? r3(M.tsig) : null;
+    if (tot && M && !log[x.id] && Date.parse(x.t) > now + 10 * 6e4) {
+      const pr = R.predictWith(M.P, M.s, M.sigma, x.h, x.a, x.neu);
+      if (pr.known) { const pu = 1 - R.phi((tot[0] - pr.total) / M.tsig), side = pu >= 0.58 ? 'U' : pu <= 0.42 ? 'A' : null;
+        if (side) log[x.id] = { t: x.t, lg: x.lg, h: x.h, a: x.a, L: tot[0], T: r3(pr.total), side, p: r3(side === 'U' ? pu : 1 - pu), odd: side === 'U' ? tot[2] : tot[1], res: null }; }
+    }
   }
-  writeJson('b/oran.json', { v: 2, updated: NOW.toISOString(), g, ts });
-  console.log(`gunluk basket: baraj ${Object.keys(g).length} mac`);
+  // sonuclar
+  for (const [id, l] of Object.entries(log)) {
+    const t = Date.parse(l.t);
+    if (!l.res) { const db = dbs.get(l.lg); let sc = null;
+      if (db) for (const list of Object.values(db.seasons || {})) { const y = list.find((y) => y[1] === l.h && y[2] === l.a && Math.abs(Date.parse(y[0]) - t) < 1.6 * 864e5); if (y) { sc = [y[3], y[4]]; break; } }
+      if (sc) { const T = sc[0] + sc[1]; l.sc = sc; l.res = T === l.L ? 'V' : (T > l.L) === (l.side === 'U') ? 'W' : 'L'; } else if (t < now - 3 * 864e5) l.res = 'V'; }
+    if (t < now - 60 * 864e5) delete log[id];
+  }
+  const done = Object.values(log).filter((l) => l.res === 'W' || l.res === 'L'), grp = (f) => { const L = done.filter(f); return { n: L.length, w: L.filter((l) => l.res === 'W').length, exp: r3(L.reduce((s, l) => s + l.p, 0)), pl: r3(L.reduce((s, l) => s + (l.res === 'W' ? l.odd - 1 : -1), 0)) }; };
+  const sum = { all: grp(() => true), strong: grp((l) => l.p >= 0.65), U: grp((l) => l.side === 'U'), A: grp((l) => l.side === 'A') };
+  writeJson('b/oran.json', { v: 2, updated: NOW.toISOString(), g, ts, sum, recent: done.sort((a, b) => (a.t < b.t ? 1 : -1)).slice(0, 15) });
+  writeJson('b/baraj.json', { v: 2, log });
+  console.log(`gunluk basket: baraj ${Object.keys(g).length} mac, karne ${JSON.stringify(sum.all)}`);
 }
 
 export async function gunlukBasket({ get, pool, readJson, writeJson, NOW, index, per }) {
@@ -115,7 +138,7 @@ export async function gunlukBasket({ get, pool, readJson, writeJson, NOW, index,
     if (Date.parse(l.t) <= now) continue; const e = byIo.get(l.io); if (!e) continue;
     const o = legsOf(e, { h: l.h, a: l.a, neu: 0 }, null, per?.st?.[l.lg]).find((x) => x.mk === l.mk)?.odd; if (o > 1) { l.close = o; l.closeAt = NOW.toISOString().slice(0, 16); }
   }
-  try { barajlar({ iddaa, dbs, now, writeJson, NOW }); } catch (e) { console.warn('gunluk basket: baraj', e.message); }
+  try { barajlar({ iddaa, dbs, now, writeJson, readJson, NOW }); } catch (e) { console.warn('gunluk basket: baraj', e.message); }
   if (need) {
     // aday maclar: bugun (Turkiye saati) baslayip yarin sabah 10:00'a kadar
     const until = Date.parse(today + 'T07:00:00Z') + 864e5, games = [];

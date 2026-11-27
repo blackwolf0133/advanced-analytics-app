@@ -61,7 +61,7 @@ function chart(series) {
     ${series.map((s) => `<polyline fill="none" stroke="${s.col}" stroke-width="2.5" points="${s.pts.map((p, i) => `${x(i, s.pts.length).toFixed(1)},${y(p[1]).toFixed(1)}`).join(' ')}"/>`).join('')}</svg>
     <div class="muted" style="font-size:12px">${series.map((s) => `<span style="color:${s.col}">━</span> ${s.name}: <b>${TL(s.pts[s.pts.length - 1]?.[1] || 0)}</b>`).join(' · ')}</div>`;
 }
-const COLS = ['#7aa2ff', '#ffb454', '#58e08f', '#ff6b6b', '#c58cff'];
+const COLS = ['#7aa2ff', '#ffb454', '#58e08f', '#ff6b6b', '#c58cff', '#4dd0e1', '#f48fb1', '#d4e157'];
 function kasaCard(O, title, listNames = {}) {
   if (!O?.kasa) return ''; const S = [];
   if (O.kasa.combo.length) S.push({ name: 'Günlük kombine', pts: O.kasa.combo, col: COLS[0] });
@@ -103,7 +103,11 @@ function basketPart(today, yest) {
 const LISTS = { g6: ['6+ gol listesi', 'gol6', 'Maçta 6 ya da daha fazla gol. İki yol birleştirilir: iddaa\'nın “Toplam Gol 6+” oranı ve alt/üst + 1X2 çizgilerinden hesaplanan gol beklentisi. Sıradan bir maçta %6.'],
   kk2: ['İki yarıda karşılıklı gol', 'kk2', 'İlk yarıda da ikinci yarıda da iki takım gol atar. İddaa\'nın “1. ve 2. Yarıda KG” oranı ile çizgilerden hesaplanan değer birleştirilir. Sıradan bir maçta %5.'],
   u35: ['3,5 Üst listesi (4+ gol)', 'u35', 'Daha gerçekçi gol listesi: maçta en az 4 gol. Listedeki maçlarda ihtimal genelde %45–60.'],
-  kgv: ['KG Var listesi', 'kgv', 'Daha gerçekçi gol listesi: iki takım da gol atar. Listedeki maçlarda ihtimal genelde %60–67.'] };
+  kgv: ['KG Var listesi', 'kgv', 'Daha gerçekçi gol listesi: iki takım da gol atar. Listedeki maçlarda ihtimal genelde %60–67.'],
+  iykg: ['İlk yarı KG Var', 'kk2', 'İlk yarıda iki takım da gol atar. İddaa\'nın “1. Yarı KG” oranı ile gol beklentisinin ilk yarı payından hesaplanan değer birleştirilir. Sıradan bir maçta yaklaşık %20; listedeki maçlarda genelde %25–35.'],
+  iu05: ['İlk yarı 0,5 Üst', 'iu', 'İlk yarıda en az 1 gol. En sık tutan gol listesi: listedeki maçlarda ihtimal genelde %75–85. Oranı düşüktür.'],
+  iu15: ['İlk yarı 1,5 Üst', 'iu', 'İlk yarıda en az 2 gol. Listedeki maçlarda ihtimal genelde %40–50.'] };
+const LN = { g6: '6+ gol', kk2: '2 yarı KG', u35: '3,5 Üst', kgv: 'KG Var', iykg: 'İY KG', iu05: 'İY 0,5Ü', iu15: 'İY 1,5Ü' };
 const RESEARCH = `<details class="card"><summary><b>Neden 7 maçta 1-2 tutuyor?</b> <span class="muted">(araştırma)</span></summary>
     <p class="muted" style="margin:8px 0 0">22 Avrupa liginin 2021-2026 arasındaki 41.373 maçında (football-data.co.uk, Pinnacle kapanış oranları) test ettim. Oranlardan hesaplanan olasılık gerçekle çok iyi uyuştu: bahisçinin en yüksek gördüğü %1'lik maçlarda bile 6+ gol %28,5, iki yarıda KG %13,5 oranında çıktı. Lig, güç farkı ve gol ortalaması gibi ek bilgiler eklemek tahmini iyileştirmedi; yani bu pazarlarda piyasayı geçmek çok zor. Bu yüzden 7 maçlık listede ortalama 1–2 maç tutması normal; liste “en olası maçlar”dır, kombine değildir. Daha sık tutan seçenek isterseniz 3,5 Üst ve KG Var listelerine bakın.</p>
     <p class="muted" style="margin:6px 0 0">📉 işareti: 2,5 Üst oranı ilk görüldüğü andan bu yana belirgin düştü, yani piyasaya gol yönünde para geliyor (profesyonellerin takip ettiği “düşen oran” sinyali).</p></details>`;
@@ -117,6 +121,7 @@ export function dailyBadges() {
   if (G) {
     out.banko = T?.combo ? `bugün oran ${o2(T.combo.odds)}${T.combo.res === 'W' ? ' ✓' : T.combo.res === 'L' ? ' ✗' : ''}` : 'bugün hazırlanıyor';
     for (const k of Object.keys(LISTS)) out[k] = Y?.[k] ? `dün ${Y[k].hits ?? 0}/7 tuttu` : T?.[k] ? 'bugün hazır' : 'hazırlanıyor';
+    out.iyu = T?.iu05 || T?.iu15 ? 'bugün hazır' : Y?.iu05 ? `dün 0,5Ü ${Y.iu05.hits ?? 0}/7` : 'hazırlanıyor';
     out.karne = G.sum?.combo?.days ? `kombine ${G.sum.combo.won}/${G.sum.combo.days}` : 'sonuçlar birikiyor';
   }
   if (Bk) { const t = Bk.days[today] || {}, n = ['combo', 'orta', 'surpriz'].filter((k) => t[k]).length; out.basket = n ? `bugün ${n} kupon` : 'bugün kupon yok'; }
@@ -142,13 +147,17 @@ function bankoPart(G, today, yest) {
     `<details class="card"><summary><b>Kombine nasıl kuruluyor?</b></summary><p class="muted" style="margin:8px 0 0">Kombine iddaa'nın gerçek oranlarıyla kurulur: her seçimin olasılığı oranlardan kâr payı temizlenerek bulunur, istatistik modeli açıkça karşı çıkıyorsa seçim alınmaz; toplam oranı 1,35–1,45 olan, MBS kuralına uyan ve tutma olasılığı en yüksek 2–3'lü seçilir. Sonuçlar biriktikçe oran olasılıkları gerçekleşen oranlara göre kendiliğinden düzeltilir. Son güncelleme ${hm(G.updated)}.</p></details>`].join('');
 }
 function karnePart(G, today) {
-  const S = G.sum || {}, LN = { g6: '6+ gol', kk2: '2 yarı KG', u35: '3,5 Üst', kgv: 'KG Var' }, parts = [`<h3 style="margin:4px 4px 8px">Karne ve sanal kasa · futbol</h3>`];
+  const S = G.sum || {}, parts = [`<h3 style="margin:4px 4px 8px">Karne ve sanal kasa · futbol</h3>`];
   parts.push(kasaCard(G.ozet, 'Sanal kasa · futbol', LN)); parts.push(clvCard(G.ozet, 'Kapanış oranı (CLV) · futbol'));
-  parts.push(weeklyCard(G.ozet, 'Haftalık rapor · futbol', Object.entries(LN)));
-  const ds = Object.keys(G.days).sort(), pastDays = ds.filter((d) => d < today).slice(-14).reverse();
-  if (pastDays.length) parts.push(`<div class="card"><h2>Son günler</h2><table class="ktab"><tr><th>Gün</th><th>Kombine</th><th>6+</th><th>2 yarı KG</th><th>3,5Ü</th><th>KG</th></tr>
-    ${pastDays.map((d) => { const x = G.days[d]; return `<tr><td>${d.slice(8)}.${d.slice(5, 7)}</td><td>${x.combo ? (x.combo.res === 'W' ? '✓ ' : x.combo.res === 'L' ? '✗ ' : '… ') + o2(x.combo.odds) : '–'}</td><td>${x.g6 ? `${x.g6.hits ?? 0}/7` : '–'}</td><td>${x.kk2 ? `${x.kk2.hits ?? 0}/7` : '–'}</td><td>${x.u35 ? `${x.u35.hits ?? 0}/7` : '–'}</td><td>${x.kgv ? `${x.kgv.hits ?? 0}/7` : '–'}</td></tr>`; }).join('')}</table>
-    <p class="muted" style="margin:8px 0 0">Toplam: kombine ${S.combo?.won ?? 0}/${S.combo?.days ?? 0} (beklenen ${num(S.combo?.exp ?? 0, 1)}) · 6+ gol ${S.g6?.hits ?? 0} maç (beklenen ${num(S.g6?.exp ?? 0, 1)}) · iki yarı KG ${S.kk2?.hits ?? 0} maç (beklenen ${num(S.kk2?.exp ?? 0, 1)})</p></div>`);
+  const rows = Object.entries(LN).filter(([k]) => S[k]?.days);
+  if (S.combo?.days || rows.length) parts.push(`<div class="card"><h2>Toplam karne</h2><table class="ktab"><tr><th></th><th>Gün</th><th>Tutan</th><th>Beklenen</th></tr>
+    ${S.combo?.days ? `<tr><td><b>Günlük kombine</b></td><td>${S.combo.days}</td><td><b>${S.combo.won}</b></td><td class="muted">${num(S.combo.exp ?? 0, 1)}</td></tr>` : ''}
+    ${rows.map(([k, n]) => `<tr><td>${n}</td><td>${S[k].days}</td><td><b>${S[k].hits}</b> / ${S[k].days * 7}</td><td class="muted">${num(S[k].exp ?? 0, 1)}</td></tr>`).join('')}</table>
+    <p class="muted" style="margin:8px 0 0">Listelerde her gün ilk 7 maç sayılır. Tutan sayısı beklenene yakınsa olasılıklar dürüst demektir; sürekli üstündeyse avantaj, altındaysa kalibrasyon sorunu vardır.</p></div>`);
+  parts.push(weeklyCard(G.ozet, 'Haftalık rapor · futbol', []));
+  const ds = Object.keys(G.days).sort(), pastDays = ds.filter((d) => d < today).slice(-14).reverse(), keys = Object.keys(LN);
+  if (pastDays.length) parts.push(`<div class="card"><h2>Son günler</h2><table class="ktab"><tr><th>Gün</th><th>Kombine</th><th>Listeler (tutan/7)</th></tr>
+    ${pastDays.map((d) => { const x = G.days[d]; return `<tr><td>${d.slice(8)}.${d.slice(5, 7)}</td><td>${x.combo ? (x.combo.res === 'W' ? '✓ ' : x.combo.res === 'L' ? '✗ ' : '… ') + o2(x.combo.odds) : '–'}</td><td class="muted" style="font-size:12.5px">${keys.filter((k) => x[k]).map((k) => `${LN[k]} <b>${x[k].hits ?? 0}</b>`).join(' · ') || '–'}</td></tr>`; }).join('')}</table></div>`);
   if (parts.length === 1) parts.push('<div class="card muted">Sonuçlar birikiyor; ilk günler bitince burada görünecek.</div>');
   return parts.join('');
 }
@@ -159,6 +168,7 @@ export function dailySection(key, busy) {
   const G = loadDaily(); if (!G) return needDaily(busy);
   if (key === 'banko') return bankoPart(G, today, yest);
   if (key === 'karne') return karnePart(G, today);
+  if (key === 'iyu') { const k = read('kb_iyu', 'iu05'); return `<div class="row seg" id="k-iyu">${[['iu05', 'İY 0,5 Üst'], ['iu15', 'İY 1,5 Üst']].map(([v, l]) => `<button data-iyu="${v}" class="grow ${k === v ? 'primary' : ''}" style="min-height:38px">${l}</button>`).join('')}</div>` + listPart(G, k, today, yest); }
   if (LISTS[key]) return listPart(G, key, today, yest);
   return '';
 }

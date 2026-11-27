@@ -155,7 +155,7 @@ function viewAll() {
   </div>
   ${have.length ? `<div class="row" id="b-reg" style="margin-bottom:8px;flex-wrap:wrap">${REGIONS.map((r) => `<button data-r="${r}" class="grow ${st.region === r ? 'primary' : ''}" style="min-height:36px;padding:4px 6px;font-size:12.5px">${r}</button>`).join('')}</div>
     <label style="display:flex;gap:8px;align-items:center;margin:0 4px 10px"><input type="checkbox" id="b-ncaa" ${st.ncaa ? 'checked' : ''}> Üniversite maçlarını da göster (NCAA, günde yüzlerce maç)</label>
-    <div class="row" id="b-tabs" style="margin-bottom:12px">${[['live', '● Canlı'], ['games', 'Yaklaşan'], ['results', 'Sonuçlar']].map(([k, v]) => `<button data-t="${k}" class="grow ${st.tab === k ? 'primary' : ''}" style="min-height:40px">${v}</button>`).join('')}</div><div id="b-body"></div>` : ''}
+    <div class="row" id="b-tabs" style="margin-bottom:12px">${[['live', '● Canlı'], ['games', 'Yaklaşan'], ['line', 'Baraj farkı'], ['results', 'Sonuçlar']].map(([k, v]) => `<button data-t="${k}" class="grow ${st.tab === k ? 'primary' : ''}" style="min-height:40px;padding:4px 2px;font-size:13px">${v}</button>`).join('')}</div><div id="b-body"></div>` : ''}
   <div class="warn">Olasılıklar yalnızca geçmiş maç skorlarından hesaplanır. Sakatlık, kadro ve dinlenme bilgisi yoktur. Kazanç garantisi yoktur.</div>`;
   $('#b-lg').onchange = (e) => { st.id = e.target.value; write('bb_sel', st.id); st.home = st.away = null; viewBasket(); };
   $('#b-all').onclick = async () => {
@@ -169,8 +169,8 @@ function viewAll() {
   $('#b-reg').onclick = (e) => { const b = e.target.closest('[data-r]'); if (b) { st.region = b.dataset.r; write('bb_region', st.region); viewBasket(); } };
   $('#b-ncaa').onchange = (e) => { st.ncaa = e.target.checked; write('bb_ncaa', st.ncaa); viewBasket(); };
   $('#b-tabs').onclick = (e) => { const b = e.target.closest('[data-t]'); if (b) { st.tab = b.dataset.t; viewBasket(); } };
-  if (!['results', 'live'].includes(st.tab)) st.tab = 'games';
-  (st.tab === 'results' ? allResults : st.tab === 'live' ? allLive : allGames)(have.filter(inView));
+  if (!['results', 'live', 'line'].includes(st.tab)) st.tab = 'games';
+  (st.tab === 'results' ? allResults : st.tab === 'live' ? allLive : st.tab === 'line' ? allLines : allGames)(have.filter(inView));
   // veri 3 saatten eskiyse arka planda kendiliginden guncellenir (sonuclar ve yaklasan maclar)
   if (!st.busy && !st.autoAt && Date.now() - oldest > 3 * 3600e3) { st.autoAt = Date.now(); st.busy = true; st.step = 'otomatik';
     B.downloadAll(httpGet).then(() => { st.cache = {}; }, () => {}).finally(() => { st.busy = false; st.step = ''; if ($('#b-tabs')) viewBasket(); }); }
@@ -211,6 +211,30 @@ function allLive(ls) {
     st.liveBusy = false; if (st.tab === 'live' && $('#b-tabs')) allLive(ls);
   };
   if (!liveTimer) { liveTimer = setInterval(tick, 30000); tick(); }
+}
+/** Modelin beklenen toplaminin iddaa barajindan en cok ayrildigi maclar + bu sinyalin gercek karnesi. */
+function allLines(ls) {
+  const O = B.loadLines(), now = Date.now(), rows = [];
+  for (const l of ls) {
+    const db = B.loadLeague(l.id), M = modelOf(l.id, false); if (!M) continue;
+    for (const [utc, home, away, neutral] of db.upcoming || []) {
+      const t = Date.parse(utc), x = O?.g?.[`${l.id}|${utc}|${home}`]; if (!x?.tot || t < now - 36e5 || t > now + 72 * 36e5) continue;
+      const p = B.predict(M, home, away, neutral); if (!p.known) continue;
+      const L = x.tot[0], sd = O.ts?.[l.id] || 18, pu = 1 - B.phi((L - p.total) / sd), side = pu >= 0.5 ? 'ÜST' : 'ALT', pm = Math.max(pu, 1 - pu);
+      rows.push({ l, utc, home, away, L, T: p.total, side, pm, odd: side === 'ÜST' ? x.tot[2] : x.tot[1], mk: x.pu != null ? (side === 'ÜST' ? x.pu : 1 - x.pu) : null });
+    }
+  }
+  rows.sort((a, b) => b.pm - a.pm);
+  const S = O?.sum, k = (o, t) => (o?.n ? `<div class="pa-k"><span>${t}</span><span><b>${o.w}/${o.n}</b> <span class="muted">(%${Math.round((o.w / o.n) * 100)}, beklenen ${num(o.exp, 1)}, kâr <b class="${o.pl > 0 ? 'hit' : o.pl < 0 ? 'miss' : ''}">${o.pl > 0 ? '+' : ''}${num(o.pl, 1)}</b> birim)</span></span></div>` : '');
+  $('#b-body').innerHTML = `<div class="card"><h2>Baraj farkı <span class="tag">toplam sayı</span></h2>
+    <p class="muted" style="margin:0">Modelin beklediği toplam sayının iddaa barajından en çok ayrıldığı maçlar üstte. Basketbolda barajlar çok isabetlidir; model ile baraj ayrıştığında çoğu zaman haklı olan barajdır (sakatlık, dinlenme, tempo bilgisi). Aşağıdaki karne bunun gerçekte nasıl gittiğini ölçer.</p></div>
+    <div class="card"><h2>Karne <span class="tag">son 60 gün</span></h2>${S?.all?.n ? k(S.all, 'Hepsi (%58+)') + k(S.strong, 'Güçlü (%65+)') + k(S.U, 'Üst tarafı') + k(S.A, 'Alt tarafı') : '<p class="muted" style="margin:0">Sonuçlar birikiyor; ilk maçlar bitince burada görünecek. Birkaç yüz maç olmadan karar verme.</p>'}
+      ${O?.recent?.length ? `<details><summary class="muted">Son biten maçlar</summary>${O.recent.map((x) => `<div class="muted">${x.res === 'W' ? '<b class="hit">✓</b>' : '<b class="miss">✗</b>'} ${esc(x.a)} @ ${esc(x.h)}: baraj ${num(x.L)} ${x.side === 'U' ? 'Üst' : 'Alt'} (model ${num(x.T)}) → ${x.sc[0] + x.sc[1]}</div>`).join('')}</details>` : ''}</div>
+    ${rows.length ? rows.slice(0, 40).map((r) => `<div class="card"><p class="lgtag">${esc(r.l.name)}</p><h2>${esc(r.away)} <span class="muted">@</span> ${esc(r.home)}</h2>
+      <p class="muted" style="margin:-4px 0 8px">${trTime(r.utc)} (Türkiye saati)</p>
+      <div class="tiles"><div class="tile"><span>iddaa barajı</span><b>${num(r.L)}</b></div><div class="tile"><span>Model</span><b>${num(r.T)}</b></div><div class="tile ${r.pm >= 0.62 ? 'gold' : ''}"><span>Taraf</span><b class="${r.side === 'ÜST' ? 'hit' : 'miss'}">${r.side} ${pct(r.pm, 0)}</b></div></div>
+      <p class="muted" style="margin:6px 0 0">Fark ${r.T - r.L > 0 ? '+' : '−'}${num(Math.abs(r.T - r.L))} sayı · ${r.side} oranı ${num(r.odd, 2)}${r.mk != null ? ` · iddaa'ya göre ${pct(r.mk, 0)}` : ''}</p></div>`).join('')
+      : `<div class="card"><p class="muted">${O ? 'Önümüzdeki 3 günde barajı bilinen maç yok (iddaa bülteninde olmayan ligler gösterilmez).' : 'Baraj verisi henüz inmedi; biraz sonra tekrar bak.'}</p></div>`}`;
 }
 function chipsAll() {
   return `<div class="card"><h2>Güven eşiği <span class="tag">favoriye verilen olasılık</span></h2>

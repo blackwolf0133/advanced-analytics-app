@@ -1,5 +1,7 @@
 package com.aad.mobile;
 
+import android.graphics.Color;
+
 import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
@@ -251,6 +253,18 @@ public class MainActivity extends Activity {
                 if (on && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                     requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFY_DAILY);
                 } else DailyNotify.schedule(MainActivity.this);
+            });
+        }
+
+        /** Renk temasi: durum cubugu, alt gezinme cubugu ve sayfa arka plani (#rrggbb). */
+        @JavascriptInterface
+        public void setBars(String bg, String panel) {
+            runOnUiThread(() -> {
+                try {
+                    int b = Color.parseColor(bg), p = Color.parseColor(panel);
+                    getWindow().setStatusBarColor(b); getWindow().setNavigationBarColor(p);
+                    if (web != null) web.setBackgroundColor(b);
+                } catch (IllegalArgumentException e) { /* gecersiz renk: degistirme */ }
             });
         }
 

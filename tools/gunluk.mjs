@@ -30,7 +30,11 @@ const SPECIAL = {
   KK2: { key: 'kk2', hit: (h, a, h1, a1) => h1 > 0 && a1 > 0 && h - h1 > 0 && a - a1 > 0, ht: true, odd: (od) => od.kk2?.[0] },
   'U3.5': { key: 'u35', hit: (h, a) => h + a >= 4, ht: false, odd: (od) => od.ou?.['3.5']?.[1] },
   KGV: { key: 'kgv', hit: (h, a) => h > 0 && a > 0, ht: false, odd: (od) => od.kg?.[0] },
+  IYKG: { key: 'iykg', hit: (h, a, h1, a1) => h1 > 0 && a1 > 0, ht: true, odd: (od) => od.iykg?.[0] },
+  IU05: { key: 'iu05', hit: (h, a, h1, a1) => h1 + a1 >= 1, ht: true, odd: (od) => od.iou?.['0.5']?.[1] },
+  IU15: { key: 'iu15', hit: (h, a, h1, a1) => h1 + a1 >= 2, ht: true, odd: (od) => od.iou?.['1.5']?.[1] },
 };
+export const LIST_KEYS = Object.values(SPECIAL).map((S) => S.key);
 
 /** Kombine: 2-3 secim, farkli maclar, toplam oran [lo, hi], MBS kurali; tutma olasiligi en yuksek olan. */
 export function bestCombo(legs, lo = 1.35, hi = 1.45, minLegs = 2) {
@@ -96,9 +100,9 @@ export async function gunluk({ get, pool, readJson, writeJson, NOW, matches, cal
   const day = (store.days[today] ||= { d: today }), early = new Date(now + 3 * 36e5).getUTCHours() < 7;   // 07:00'den once kurulmaz (oranlar gun icinde oturur)
   const upcoming = matches.filter((m) => m.od && m.st === 'pre' && istDay(m.t) === today && Date.parse(m.t) > now + 20 * 6e4 && !leagues[m.lg]?.nat);
   // listeler kurulacaksa: aday maclarin butun pazarlari (iki yarida KG ve 2. yari KG yalnizca mac detayinda var)
-  if ((!day.g6 || !day.kk2) && upcoming.length && pool && !early) {
-    const score = (m) => { const P0 = marketProbs(m.od, leagues[m.lg]?.f); return Math.max(P0.G6 || 0, (P0.KK2 || 0) * 1.5, (P0['U2.5'] || 0) * 0.2); };
-    const cand = upcoming.slice().sort((x, y) => score(y) - score(x)).slice(0, 45);
+  if ((!day.g6 || !day.kk2 || !day.iykg) && upcoming.length && pool && !early) {
+    const score = (m) => { const P0 = marketProbs(m.od, leagues[m.lg]?.f); return Math.max(P0.G6 || 0, (P0.KK2 || 0) * 1.5, (P0['U2.5'] || 0) * 0.2, (P0.IYKGd || 0) * 0.6); };
+    const cand = upcoming.slice().sort((x, y) => score(y) - score(x)).slice(0, 60);
     const det = await pool(cand, 4, async (m) => { try { const j = await get(IDDAA_EVENT(m.io)); return j?.data ? [m, parseIddaa(j.data)] : null; } catch { return null; } });
     let n = 0; for (const x of det) { if (!x) continue; const [m, d] = x; m.od = { ...m.od, ...d.od }; if (hist.ev[m.id]) hist.ev[m.id].od = m.od; n++; }
     writeJson('f/oran.json', hist); console.log(`gunluk: ${n} mac detayi alindi`);
@@ -167,8 +171,8 @@ export async function gunluk({ get, pool, readJson, writeJson, NOW, matches, cal
   let streak = 0; for (let i = done.length - 1; i >= 0 && done[i].res === 'W'; i--) streak++;
   let best = 0, run = 0; for (const c of done) { run = c.res === 'W' ? run + 1 : 0; best = Math.max(best, run); }
   const lists = (key) => { const L = ds.map((d) => store.days[d][key]).filter((x) => x && x.done); return { days: L.length, hits: L.reduce((s, x) => s + x.hits, 0), exp: r3(L.reduce((s, x) => s + x.exp, 0)) }; };
-  store.sum = { combo: { days: done.length, won: done.filter((c) => c.res === 'W').length, exp: r3(done.reduce((s, c) => s + c.p, 0)), streak, best }, g6: lists('g6'), kk2: lists('kk2'), u35: lists('u35'), kgv: lists('kgv') };
-  store.ozet = summarize(store.days, ['g6', 'kk2', 'u35', 'kgv']);
+  store.sum = { combo: { days: done.length, won: done.filter((c) => c.res === 'W').length, exp: r3(done.reduce((s, c) => s + c.p, 0)), streak, best }, ...Object.fromEntries(LIST_KEYS.map((k) => [k, lists(k)])) };
+  store.ozet = summarize(store.days, LIST_KEYS);
   store.cal = Object.fromEntries(Object.entries(mcal).map(([k, o]) => [k, { n: o.n, on: !!o.knots }]));
   store.updated = NOW.toISOString();
   writeJson('f/gunluk.json', store);

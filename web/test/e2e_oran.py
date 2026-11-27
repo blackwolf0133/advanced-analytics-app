@@ -31,7 +31,13 @@ try:
         t2 = pg.inner_text(".om >> nth=0"); print("CANLI:", t2[:200]); assert "1,80 → 1,55" in t2 and "telefon" in pg.inner_text("#f-odds")
         pg.click('#nav [data-v="kombine"]'); pg.click('#ksec [data-sec="karne"]'); pg.wait_for_selector(".kasa", timeout=15000); k = pg.inner_text("#main")
         assert "Sanal kasa · futbol" in k and "Kapanış oranı (CLV)" in k and "+%2,1" in k and "Haftalık rapor" in k, k[:1500]
-        pg.click('#nav [data-v="settings"]'); pg.check("#ntf"); assert json.loads(pg.evaluate("localStorage.getItem('aad.notify_daily')")) is True
+        pg.click('#nav [data-v="settings"]'); assert pg.locator("#themes button").count() == 6
+        pg.click('#themes [data-th="zumrut"]'); assert pg.evaluate("document.documentElement.dataset.theme") == "zumrut" and pg.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()") == "#34d399"
+        pg.screenshot(path="/tmp/tema_zumrut.png"); pg.click('#nav [data-v="kombine"]'); pg.screenshot(path="/tmp/tema_zumrut_k.png"); pg.click('#nav [data-v="settings"]')
+        pg.click('#themes [data-th="altin"]'); pg.click('#nav [data-v="kombine"]'); pg.screenshot(path="/tmp/tema_altin_k.png"); pg.click('#nav [data-v="settings"]')
+        pg.click('#themes [data-th="mor"]'); pg.click('#nav [data-v="kombine"]'); pg.screenshot(path="/tmp/tema_mor_k.png"); pg.click('#nav [data-v="settings"]')
+        pg.click('#themes [data-th="gece"]'); assert pg.evaluate("document.documentElement.dataset.theme") is None
+        pg.check("#ntf"); assert json.loads(pg.evaluate("localStorage.getItem('aad.notify_daily')")) is True
         with pg.expect_download() as d: pg.click("#bk-save")
         bk = json.loads(open(d.value.path()).read()); print("yedek anahtarlari:", sorted(bk["data"])[:12]); assert bk["app"] == "advanced-analytics" and "notify_daily" in bk["data"] and "fg_move" not in bk["data"]
         pg.evaluate("localStorage.removeItem('aad.notify_daily')"); pg.evaluate("t => AAD.onBackup(t)", json.dumps(bk)); assert json.loads(pg.evaluate("localStorage.getItem('aad.notify_daily')")) is True

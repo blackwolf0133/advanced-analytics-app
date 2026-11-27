@@ -67,8 +67,9 @@ function couponCard(c, mode, ctx) {
 }
 const SECS = [['banko', '⭐', 'Günlük banko', 'futbol kombine'], ['basket', '🏀', 'Basketbol kuponları', 'banko · orta · sürpriz'],
   ['g6', '⚽', '6+ gol', '7 maçlık liste'], ['kk2', '🔁', 'İki yarıda KG', '1. ve 2. yarı KG var'], ['u35', '📈', '3,5 Üst', '4+ gol listesi'], ['kgv', '🤝', 'KG Var', 'karşılıklı gol'],
+  ['iykg', '⏱️', 'İlk yarı KG', '1. yarı KG var'], ['iyu', '⚡', 'İlk yarı üst', '0,5 · 1,5 üst'],
   ['model', '🧮', 'Model kuponları', 'banko · MS · sürpriz'], ['mine', '📌', 'Kuponlarım', 'kaydettiklerin'], ['karne', '📊', 'Karne ve kasa', 'sanal kasa · CLV'], ['para', '💰', 'Para akışı', 'büyük bahisler']];
-const DAILY = new Set(['banko', 'basket', 'g6', 'kk2', 'u35', 'kgv', 'karne']);
+const DAILY = new Set(['banko', 'basket', 'g6', 'kk2', 'u35', 'kgv', 'iykg', 'iyu', 'karne']);
 function secGrid(cur) {
   const b = dailyBadges(), list = saved(), wait = list.filter((c) => c.legs.some((l) => l.hit == null)).length;
   b.mine = list.length ? `${list.length} kupon${wait ? ` · ${wait} sürüyor` : ''}` : 'henüz yok';
@@ -98,6 +99,7 @@ export function viewKombine(toast) {
   if ($('#k-dd')) $('#k-dd').onclick = () => update(true);
   if ($('#k-up')) $('#k-up').onclick = () => update(DAILY.has(sec));
   if (sec === 'model') bindModel(re, update, toast);
+  if ($('#k-iyu')) $('#k-iyu').onclick = (e) => { const b = e.target.closest('[data-iyu]'); if (b) { write('kb_iyu', b.dataset.iyu); re(); } };
   document.querySelectorAll('.kdel').forEach((x) => { x.onclick = () => { write('kb_saved', saved().filter((c) => c.id !== x.dataset.id)); re(); }; });
   // gunluk veri: ilk acilista ya da 30 dakikadan eskiyse kendiliginden iner
   if (!loadDaily() && !st.autoDaily) { st.autoDaily = true; downloadDaily(httpGet).then(re, () => {}); }

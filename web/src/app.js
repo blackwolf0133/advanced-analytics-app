@@ -8,7 +8,7 @@ import { viewKombine } from './kombineui.js';
 import * as AI from './aiui.js';
 import { onHttp } from './net.js';
 
-const VERSION = '0.15.0';
+const VERSION = '0.16.0';
 const st = { view: 'roulette', db: null, lastPred: undefined, armed: null, cap: 'off' };
 const TITLES = { roulette: 'Rulet', football: 'Futbol', basket: 'Basketbol', kombine: 'Kombine', settings: 'Ayarlar' };
 
@@ -120,6 +120,15 @@ function bindScreen() {
 }
 const honest = () => `<div class="warn"><b>Bilmeniz gereken:</b> Program gelen sayıları sayar ve geçmişte ne olduğunu gösterir. Sıradaki sayıyı bilemez; rulette her tur bir öncekinden bağımsızdır ve kasa avantajı (%2,7) hangi sayıya oynarsanız oynayın değişmez.</div>`;
 
+/* ---------------- renk temasi ---------------- */
+const THEMES = [['gece', 'Gece mavisi', ['#0e1319', '#161d26', '#4c9dff']], ['zumrut', 'Zümrüt', ['#0a1411', '#11201b', '#34d399']], ['altin', 'Altın', ['#0f0e0b', '#1a1813', '#f2c94c']],
+  ['mor', 'Mor gece', ['#110e1b', '#1a1528', '#a78bfa']], ['okyanus', 'Okyanus', ['#06171e', '#0c242e', '#22d3ee']], ['siyah', 'Simsiyah', ['#000000', '#0c0c0e', '#4c9dff']]];
+function applyTheme() {
+  const t = read('theme', 'gece'), th = THEMES.find((x) => x[0] === t) || THEMES[0]; if (t === 'gece') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  if (window.Native?.setBars) try { Native.setBars(th[2][0], th[2][1]); } catch (e) { /* eski surum */ }
+}
+applyTheme();
+
 /* ---------------- diger ekranlar ---------------- */
 function viewSettings() {
   const d = loadRoulette(), n = d.sessions.reduce((a, s) => a + s.spins.length, 0);
@@ -127,12 +136,15 @@ function viewSettings() {
   <div class="card"><h2>Uygulama</h2><p class="muted">Advanced Analytics · telefon sürümü ${VERSION}<br>Veriler yalnızca bu telefonda saklanır. Uygulama yalnızca izinli adreslere bağlanır: maç verisi (GitHub, ESPN, football-data.co.uk) ve isterseniz yapay zekâ servisleri. Oyuna müdahale etmez ve bahis yapmaz; rulette yalnızca ekrandaki sayıları okur.</p></div>
   <div class="card"><h2>Ekran okuma hakkında</h2><ol class="steps"><li>Yalnızca Avrupa ruleti (0-36) desteklenir.</li><li>Brave ve Chrome’da ek ayar gerekmez.</li><li><b>Tor Browser</b> ekran kaydını varsayılan olarak engeller; görüntü siyah gelir. Okuma için Tor Browser’da Ayarlar → Gelişmiş → “Ekran görüntülerine izin ver” (Allow screenshots) açılmalıdır. Bu ayar açıkken telefondaki başka uygulamalar da Tor ekranını kaydedebilir ve sayfa “son uygulamalar” önizlemesinde görünür; işiniz bitince kapatın.</li><li>Uygulama bu engeli kendisi aşmaz ve aşmaya çalışmaz.</li><li>Yüzen pencere okunan tablonun üstünü kapatmamalıdır.</li><li>Telefonu döndürürseniz bölgeyi yeniden seçmeniz gerekir.</li><li>Okunamayan sayı kaydedilmez; yanlış kayıt olursa “Geri al” ile silin.</li></ol></div>
   ${AI.settingsCard()}
+  <div class="card"><h2>Renk teması</h2><div class="themes" id="themes">${THEMES.map(([k, n, c]) => `<button data-th="${k}" class="${(read('theme', 'gece')) === k ? 'on' : ''}"><span class="sw">${c.map((x) => `<i style="background:${x}"></i>`).join('')}</span>${n}</button>`).join('')}</div>
+    <p class="muted" style="margin:8px 0 0">Hemen uygulanır. Rulet sayılarının renkleri (kırmızı, siyah, yeşil) değişmez. Simsiyah tema AMOLED ekranlarda pil tasarrufu sağlar.</p></div>
   <div class="card"><h2>Sabah bildirimi</h2><label style="display:flex;gap:10px;align-items:center"><input type="checkbox" id="ntf" ${read('notify_daily', false) ? 'checked' : ''}> Her sabah 07:30'da günlük banko kombinelerini (futbol ve basketbol) bildir</label>
     <p class="muted" style="margin:6px 0 0">Bildirim izni istenir. Pil tasarrufu nedeniyle birkaç dakika gecikebilir. ${window.Native?.setDailyNotify ? '' : 'Bu özellik yalnızca telefon uygulamasında çalışır.'}</p></div>
   <div class="card"><h2>Yedekleme</h2><p class="muted" style="margin:0 0 8px">Rulet oturumları, kayıtlı kuponlar, ayarlar ve seçimler tek dosyaya yazılır (İndirilenler klasörü). Yeni telefonda “Geri yükle” ile o dosyayı seçin. İndirilebilen maç verileri dosyaya konmaz, kendiliğinden yeniden iner. Yapay zekâ anahtarı eklediyseniz o da dosyadadır; dosyayı kimseyle paylaşmayın.</p>
     <div class="row"><button id="bk-save" class="grow primary">Yedekle</button><button id="bk-load" class="grow">Geri yükle</button></div></div>
   <div class="card"><h2>Veri</h2><p class="muted">${d.sessions.length} oturum, ${n} sayı kayıtlı.</p><button id="wipe" class="danger" style="width:100%">Bütün rulet verisini sil</button></div>`;
   AI.bindSettings(toast);
+  $('#themes').onclick = (e) => { const b = e.target.closest('[data-th]'); if (!b) return; write('theme', b.dataset.th); applyTheme(); viewSettings(); };
   $('#ntf').onchange = (e) => { write('notify_daily', e.target.checked); if (window.Native?.setDailyNotify) Native.setDailyNotify(e.target.checked); toast(e.target.checked ? 'Sabah bildirimi açıldı (07:30).' : 'Sabah bildirimi kapatıldı.'); };
   $('#bk-save').onclick = () => {
     const keys = window.Native?.dbKeys ? JSON.parse(Native.dbKeys()) : Object.keys(localStorage).filter((k) => k.startsWith('aad.')).map((k) => k.slice(4));
@@ -156,6 +168,7 @@ function onBackup(text) {
   let j; try { j = JSON.parse(text); } catch { toast('Dosya okunamadı (yedek dosyası değil).', 6000); return; }
   if (j?.app !== 'advanced-analytics' || !j.data) { toast('Bu bir Advanced Analytics yedeği değil.', 6000); return; }
   for (const [k, v] of Object.entries(j.data)) write(k, v);
+  applyTheme();
   if (j.data.notify_daily && window.Native?.setDailyNotify) Native.setDailyNotify(true);
   toast(`${Object.keys(j.data).length} kayıt geri yüklendi (${String(j.made).slice(0, 10)}).`, 6000); setView(st.view);
 }
